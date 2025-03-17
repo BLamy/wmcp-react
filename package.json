@@ -8,7 +8,8 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "storybook": "^7.5.3",
-    "vite": "^5.0.10"
+    "vite": "^5.0.10",
+    "@tailwindcss/postcss": "^4.0.14"
   },
   "scripts": {
     "storybook": "storybook dev -p 6006",
