@@ -18,8 +18,7 @@ const config = {
     "../stories/**/*.mdx",
     "../stories/**/Chat.stories.@(js|jsx|mjs|ts|tsx)",
     "../stories/**/ModelContextProtocol.stories.@(js|jsx|mjs|ts|tsx)",
-    "../stories/**/WebContainer.stories.@(js|jsx|mjs|ts|tsx)",
-    "../stories/WebContainer.stories.tsx",
+    "../stories/**/Webcontainer.stories.@(js|jsx|mjs|ts|tsx)"
   ],
   addons: [
     "@storybook/addon-links",
