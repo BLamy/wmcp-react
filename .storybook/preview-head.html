@@ -2,7 +2,10 @@
 <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin" />
 <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp" />
 
-<!-- Import the service worker registration script -->
+<!-- Import the GitHub Pages specific service worker script -->
+<script src="../gh-pages-coi.js"></script>
+
+<!-- Fallback to original service worker if needed -->
 <script src="../register-coi-sw.js"></script>
 
 <script>
@@ -16,4 +19,24 @@
   } catch (e) {
     console.error('Error checking SharedArrayBuffer:', e);
   }
+
+  // Add visual indicator of cross-origin isolation status
+  window.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() {
+      const statusEl = document.createElement('div');
+      statusEl.style.position = 'fixed';
+      statusEl.style.bottom = '10px';
+      statusEl.style.right = '10px';
+      statusEl.style.background = window.crossOriginIsolated ? 'rgba(0, 128, 0, 0.8)' : 'rgba(255, 0, 0, 0.8)';
+      statusEl.style.color = 'white';
+      statusEl.style.padding = '10px';
+      statusEl.style.borderRadius = '5px';
+      statusEl.style.fontSize = '14px';
+      statusEl.style.zIndex = '9999';
+      statusEl.textContent = window.crossOriginIsolated 
+        ? '✓ Cross-Origin Isolated' 
+        : '✗ Not Cross-Origin Isolated';
+      document.body.appendChild(statusEl);
+    }, 1000);
+  });
 </script> 

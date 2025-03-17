@@ -25,6 +25,30 @@ export default function sharedArrayBufferPlugin() {
         return true;
       } catch (e) {
         console.error('[SAB] SharedArrayBuffer is not supported:', e);
+        
+        // If SAB is not supported, and we're on GitHub Pages, inject our COI service worker
+        if (window.location.hostname.includes('github.io')) {
+          console.log('[SAB] Detected GitHub Pages. Attempting to use COI service worker...');
+          
+          // Register GitHub Pages specific COI service worker
+          if ('serviceWorker' in navigator) {
+            const swPath = new URL('./gh-pages-coi-sw.js', window.location.origin + window.location.pathname).href;
+            navigator.serviceWorker.register(swPath, { 
+              scope: window.location.pathname 
+            }).then(registration => {
+              console.log('[SAB] GitHub Pages COI ServiceWorker registered:', registration.scope);
+              
+              // If the service worker is installing, reload the page to activate it
+              if (!navigator.serviceWorker.controller) {
+                console.log('[SAB] Reloading page to activate service worker...');
+                window.location.reload();
+              }
+            }).catch(error => {
+              console.error('[SAB] GitHub Pages COI ServiceWorker registration failed:', error);
+            });
+          }
+        }
+        
         return false;
       }
     };
@@ -32,6 +56,22 @@ export default function sharedArrayBufferPlugin() {
     // Run check when document loads
     window.addEventListener('DOMContentLoaded', function() {
       window.sabSupported = window.checkSharedArrayBufferSupport();
+      
+      // Add visual indicator of isolation status
+      setTimeout(function() {
+        const isolationStatus = document.createElement('div');
+        isolationStatus.style.position = 'fixed';
+        isolationStatus.style.bottom = '10px';
+        isolationStatus.style.right = '10px';
+        isolationStatus.style.background = window.crossOriginIsolated ? 'rgba(0, 128, 0, 0.8)' : 'rgba(255, 0, 0, 0.8)';
+        isolationStatus.style.color = 'white';
+        isolationStatus.style.padding = '10px';
+        isolationStatus.style.borderRadius = '5px';
+        isolationStatus.style.fontSize = '14px';
+        isolationStatus.style.zIndex = '9999';
+        isolationStatus.textContent = window.crossOriginIsolated ? '✓ Cross-Origin Isolated' : '✗ Not Cross-Origin Isolated';
+        document.body.appendChild(isolationStatus);
+      }, 1000);
     });
   </script>`);
     },
