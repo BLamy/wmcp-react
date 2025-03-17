@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin" />
+  <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp" />
+  <title>Storybook</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+    }
+  </style>
+  
+  <!-- Import the service worker registration script -->
+  <script src="./register-coi-sw.js"></script>
+  
+  <script>
+    // Check for SharedArrayBuffer support
+    window.checkSharedArrayBuffer = function() {
+      try {
+        new SharedArrayBuffer(1);
+        console.log('SharedArrayBuffer is supported');
+        return true;
+      } catch (e) {
+        console.error('SharedArrayBuffer is not supported', e);
+        return false;
+      }
+    };
+    
+    // Run the check on load
+    window.addEventListener('DOMContentLoaded', function() {
+      window.sabSupported = window.checkSharedArrayBuffer();
+    });
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+</body>
+</html> 

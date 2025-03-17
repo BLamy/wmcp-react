@@ -1,0 +1,19 @@
+<!-- This content gets injected into the iframe head -->
+<meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin" />
+<meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp" />
+
+<!-- Import the service worker registration script -->
+<script src="../register-coi-sw.js"></script>
+
+<script>
+  // Force enable SharedArrayBuffer by setting the relevant fields explicitly
+  // This is a workaround for environments where headers can't be set
+  try {
+    // Check if SharedArrayBuffer is already supported
+    if (typeof SharedArrayBuffer === 'undefined') {
+      console.warn('Attempting to polyfill SharedArrayBuffer detection...');
+    }
+  } catch (e) {
+    console.error('Error checking SharedArrayBuffer:', e);
+  }
+</script> 

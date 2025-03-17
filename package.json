@@ -25,12 +25,13 @@
   },
   "scripts": {
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build && cp .storybook/_headers storybook-static/"
+    "build-storybook": "storybook build && cp public/coi-serviceworker.js storybook-static/ && cp public/register-coi-sw.js storybook-static/ && cp public/coi-check.html storybook-static/"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.7.0",
     "@monaco-editor/react": "^4.7.0",
     "@webcontainer/api": "^1.1.3",
+    "coi-serviceworker": "^0.1.7",
     "framer-motion": "^12.5.0",
     "lucide-react": "^0.292.0",
     "postcss": "^8.4.31",
