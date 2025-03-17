@@ -107,7 +107,7 @@ export function DynamicForm({
 
     return (
       <div key={name} className="border rounded-md p-3 mb-3">
-        <div className="font-medium mb-2">{name}</div>
+        <div className="font-medium mb-2 text-gray-800 dark:text-gray-200">{name}</div>
         <div className="mb-3">
           <label className="text-sm font-medium">
             Select {isOneOf ? 'one of' : 'any of'} these variants:
@@ -186,7 +186,7 @@ export function DynamicForm({
       case 'object':
         return (
           <div key={name} className="border rounded-md p-3 mb-2">
-            {!isNested && <div className="font-medium mb-2">{name}</div>}
+            {!isNested && <div className="font-medium mb-2 text-gray-800 dark:text-gray-200">{name}</div>}
             <TextField
               label={property.title || 'JSON Object'}
               description={description}
@@ -206,7 +206,7 @@ export function DynamicForm({
       case 'array':
         return (
           <div key={name} className="border rounded-md p-3 mb-2">
-            {!isNested && <div className="font-medium mb-2">{name}</div>}
+            {!isNested && <div className="font-medium mb-2 text-gray-800 dark:text-gray-200">{name}</div>}
             <TextField
               label={property.title || 'JSON Array'}
               description={description}
@@ -309,7 +309,7 @@ export function DynamicForm({
       case 'object':
         return (
           <div key={name} className="border rounded-md p-3 mb-2">
-            <div className="font-medium mb-2">{name}{isRequired ? ' *' : ''}</div>
+            <div className="font-medium mb-2 text-gray-800 dark:text-gray-200">{name}{isRequired ? ' *' : ''}</div>
             <TextField
               label={`${name} (JSON)`}
               description={description}
@@ -330,7 +330,7 @@ export function DynamicForm({
       case 'array':
         return (
           <div key={name} className="border rounded-md p-3 mb-2">
-            <div className="font-medium mb-2">{name}{isRequired ? ' *' : ''}</div>
+            <div className="font-medium mb-2 text-gray-800 dark:text-gray-200">{name}{isRequired ? ' *' : ''}</div>
             <TextField
               label={`${name} (JSON array)`}
               description={description}

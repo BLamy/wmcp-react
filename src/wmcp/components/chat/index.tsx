@@ -361,7 +361,7 @@ function ServerConfigSheet({
             <div className="mx-auto w-12 mt-2 h-1.5 rounded-full bg-gray-400" />
             <Dialog className="px-4 pb-4 outline-hidden">
               <div className="flex items-center justify-between mb-2">
-                <Heading slot="title" className="text-xl font-semibold flex items-center gap-2">
+                <Heading slot="title" className="text-xl font-semibold flex items-center gap-2 text-gray-800 dark:text-gray-200">
                   <Server className="w-5 h-5" />
                   Configure MCP Servers
                 </Heading>
@@ -1276,7 +1276,7 @@ function ChatInterface({
 
       {/* Header */}
       <header className="border-b border-gray-200 dark:border-gray-800 p-4 flex justify-between items-center">
-        <h1 className="text-xl font-semibold flex items-center gap-2">
+        <h1 className="text-xl font-semibold flex items-center gap-2 text-gray-800 dark:text-gray-200">
           <Wand2 className="h-5 w-5" />
           <span>AI Chat with Tool Calling</span>
         </h1>

@@ -112,7 +112,7 @@ export function FileBrowserToolbar({
   };
 
   return (
-    <div className={`p-2 bg-gray-100 border-b flex flex-wrap items-center gap-2 ${className}`}>
+    <div className={`p-2 bg-gray-100 dark:bg-zinc-800 border-b flex flex-wrap items-center gap-2 ${className}`}>
       {/* Refresh button */}
       <Button
         onPress={onRefresh}

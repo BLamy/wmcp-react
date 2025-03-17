@@ -40,7 +40,7 @@ export function ToolsList({
 }: ToolsListProps) {
   return (
     <div className={`border rounded-md overflow-hidden ${className}`}>
-      <div className="bg-gray-100 px-4 py-2 font-medium border-b">
+      <div className="bg-gray-100 dark:bg-zinc-800 px-4 py-2 font-medium border-b">
         Available Tools
       </div>
       <div className={`p-2 overflow-y-auto`} style={{ maxHeight }}>
@@ -53,13 +53,13 @@ export function ToolsList({
             {tools.map(tool => (
               <li 
                 key={tool.name}
-                className={`p-2 ${onSelectTool ? 'cursor-pointer hover:bg-gray-100' : ''} ${
+                className={`p-2 ${onSelectTool ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-700' : ''} ${
                   selectedTool?.name === tool.name ? 'bg-blue-50' : ''
                 }`}
                 onClick={() => onSelectTool && onSelectTool(tool)}
               >
                 <div className="font-medium">{tool.name}</div>
-                <div className="text-sm text-gray-600">{tool.description}</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">{tool.description}</div>
               </li>
             ))}
           </ul>

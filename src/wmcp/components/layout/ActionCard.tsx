@@ -42,11 +42,11 @@ export function ActionCard({
   headerActions,
   fullHeight = false,
   width = 'auto',
-  headerBgColor = 'bg-gray-100'
+  headerBgColor = 'bg-gray-100 dark:bg-zinc-800'
 }: ActionCardProps) {
   return (
     <div 
-      className={`border rounded-md overflow-hidden bg-white dark:bg-zinc-900 ${fullHeight ? 'h-full flex flex-col' : ''} ${hasError ? 'border-red-300' : 'border-gray-200'} ${className}`}
+      className={`border rounded-md overflow-hidden bg-white dark:bg-zinc-900 text-gray-800 dark:text-gray-200 ${fullHeight ? 'h-full flex flex-col' : ''} ${hasError ? 'border-red-300' : 'border-gray-200'} ${className}`}
       style={{ width }}
     >
       {/* Card Header */}
@@ -54,8 +54,8 @@ export function ActionCard({
         <div className="flex items-center">
           {icon && <div className="mr-2">{icon}</div>}
           <div>
-            <h3 className="font-medium text-gray-800">{title}</h3>
-            {description && <p className="text-xs text-gray-600">{description}</p>}
+            <h3 className="font-medium text-gray-800 dark:text-gray-200">{title}</h3>
+            {description && <p className="text-xs text-gray-600 dark:text-gray-400">{description}</p>}
           </div>
         </div>
         
@@ -79,7 +79,7 @@ export function ActionCard({
       
       {/* Card Footer with Actions */}
       {actions && (
-        <div className="px-4 py-3 bg-gray-50 border-t flex justify-end items-center space-x-2">
+        <div className="px-4 py-3 bg-gray-50 dark:bg-zinc-900 border-t flex justify-end items-center space-x-2">
           {actions}
         </div>
       )}

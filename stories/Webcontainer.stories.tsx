@@ -15,6 +15,7 @@ import {
   ErrorDisplay,
   LoadingIndicator
 } from '../src/wmcp/components';
+import { ResizablePanel, ResizableHandle, ResizablePanelGroup } from '../src/Resizable';
 import 'xterm/css/xterm.css';
 
 const meta: Meta = {
@@ -47,16 +48,16 @@ const WebContainerDemo = ({
   }, [webContainer]);
 
   return (
-    <div className="p-4 max-w-6xl mx-auto">
-      <h1 className="text-2xl font-bold mb-2">{title}</h1>
-      <p className="mb-4 text-gray-600">{description}</p>
+    <div className="p-4 max-w-6xl mx-auto text-gray-200">
+      <h1 className="text-2xl font-bold mb-2 text-gray-100">{title}</h1>
+      <p className="mb-4 text-gray-400">{description}</p>
       
       {!isReady ? (
-        <div className="animate-pulse bg-blue-100 p-4 rounded-md">
+        <div className="animate-pulse bg-[#2d2d2d] p-4 rounded-md text-gray-300">
           Waiting for WebContainer to initialize...
         </div>
       ) : (
-        <div className="border rounded-md p-4 bg-gray-50">
+        <div className="border border-[#424242] rounded-md p-4 bg-[#1e1e1e]">
           {children}
         </div>
       )}
@@ -446,7 +447,7 @@ This is a demo project showing how to use the WebContainer API to create a file 
           </div>
           
           {message && (
-            <div className="bg-gray-100 p-3 rounded border">
+            <div className="bg-gray-100 dark:bg-zinc-800 p-3 rounded border">
               {message}
             </div>
           )}
@@ -454,7 +455,7 @@ This is a demo project showing how to use the WebContainer API to create a file 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
             {/* File Tree */}
             <div className="border rounded-md bg-white p-2 h-[500px] overflow-auto">
-              <h3 className="font-semibold mb-2 p-2 bg-gray-100 rounded sticky top-0">File Explorer</h3>
+              <h3 className="font-semibold mb-2 p-2 bg-gray-100 dark:bg-zinc-800 rounded sticky top-0">File Explorer</h3>
               {fileTree.length > 0 ? (
                 <Tree 
                   aria-label="File System" 
@@ -477,7 +478,7 @@ This is a demo project showing how to use the WebContainer API to create a file 
             <div className="border rounded-md bg-white col-span-2 h-[500px] overflow-hidden flex flex-col">
               {currentFilePath ? (
                 <>
-                  <div className="bg-gray-100 p-2 flex justify-between items-center sticky top-0">
+                  <div className="bg-gray-100 dark:bg-zinc-800 p-2 flex justify-between items-center sticky top-0">
                     <h3 className="font-semibold">
                       {currentFilePath}
                     </h3>
@@ -537,7 +538,7 @@ export const RunCommands: Story = {
     };
 
     return (
-      <div className="border rounded-md p-4 bg-gray-100">
+      <div className="border rounded-md p-4 bg-gray-100 dark:bg-zinc-800">
         <h3 className="font-semibold mb-4">Run Commands in WebContainer Terminal</h3>
         
         {message && (
@@ -715,13 +716,13 @@ process.on('SIGTERM', () => {
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <h3 className="font-semibold">Console Output:</h3>
+              <h3 className="font-semibold text-gray-800 dark:text-gray-200">Console Output:</h3>
               <pre className="bg-black text-green-400 p-3 rounded border mt-2 h-64 overflow-auto whitespace-pre-wrap">{output || 'Click "Start Node.js App" to begin...'}</pre>
             </div>
             
             {appRunning && (
               <div>
-                <h3 className="font-semibold">Server Preview:</h3>
+                <h3 className="font-semibold text-gray-800 dark:text-gray-200">Server Preview:</h3>
                 <div className="mt-2 border rounded-md overflow-hidden h-64 bg-white">
                   {serverUrl ? (
                     <iframe 
@@ -733,8 +734,8 @@ process.on('SIGTERM', () => {
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-gray-50 text-gray-500">
                       <div className="text-center p-4">
-                        <p className="font-medium mb-2">Server is running at localhost:3000</p>
-                        <p className="text-sm">Preview not available in iframe due to WebContainer limitations</p>
+                        <p className="font-medium mb-2 text-gray-800 dark:text-gray-200">Server is running at localhost:3000</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Preview not available in iframe due to WebContainer limitations</p>
                       </div>
                     </div>
                   )}
@@ -770,7 +771,7 @@ export const SharedFileSystem: Story = {
         description="This example shows how multiple components can contribute to the same WebContainer filesystem."
       >
         <div className="space-y-8">
-          <div className="text-sm text-gray-500 bg-gray-100 p-4 rounded-md">
+          <div className="text-sm text-gray-500 bg-gray-100 dark:bg-zinc-800 p-4 rounded-md">
             <p>This example demonstrates how multiple components can contribute to the WebContainer filesystem.</p>
             <p>Each component below registers its own set of files, but they all share the same WebContainer instance.</p>
             <p>Changes made in one component are visible to all other components.</p>
@@ -1020,21 +1021,21 @@ function FileContributor({
   };
   
   const colorClasses = {
-    blue: 'bg-blue-100 border-blue-300 text-blue-800',
-    green: 'bg-green-100 border-green-300 text-green-800',
-    red: 'bg-red-100 border-red-300 text-red-800',
-    purple: 'bg-purple-100 border-purple-300 text-purple-800',
-    yellow: 'bg-yellow-100 border-yellow-300 text-yellow-800'
+    blue: 'bg-[#1e293b] border-[#2d3f63] text-blue-300',
+    green: 'bg-[#1a2e1a] border-[#2d632d] text-green-300',
+    red: 'bg-[#2e1a1a] border-[#632d2d] text-red-300',
+    purple: 'bg-[#2e1a2e] border-[#632d63] text-purple-300',
+    yellow: 'bg-[#2e2e1a] border-[#63632d] text-yellow-300'
   };
   
   return (
     <div className={`border rounded-md p-4 ${colorClasses[color]}`}>
       <h3 className="font-semibold mb-2">{name}</h3>
-      <p className="text-sm mb-3">
+      <p className="text-sm mb-3 opacity-90">
         Status: {status}
         {mounted && (
           <span className="ml-1 inline-flex items-center">
-            <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
             </svg>
           </span>
@@ -1044,13 +1045,13 @@ function FileContributor({
       <div className="flex justify-end mb-2">
         <button 
           onClick={createFilesManually}
-          className="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+          className="px-2 py-1 bg-[#0e639c] text-white text-xs rounded hover:bg-[#1177bb]"
         >
           Create Manually
         </button>
       </div>
       
-      <div className="text-xs overflow-auto bg-white bg-opacity-50 p-3 rounded max-h-60">
+      <div className="text-xs overflow-auto bg-[#2d2d2d] bg-opacity-50 p-3 rounded max-h-60">
         <p className="font-semibold mb-1">Contributed files:</p>
         <ul className="list-disc pl-5 space-y-1">
           {Object.keys(files).map(path => (
@@ -1205,84 +1206,190 @@ function FileBrowser() {
 
       {/* Debug Information (if needed) */}
       {debugMessage && (
-        <ActionCard title="Debug Information">
-          <pre className="text-xs overflow-auto max-h-48 bg-gray-100 p-2 rounded">
+        <div className="border border-[#424242] rounded-md p-4 bg-[#2d2d2d]">
+          <h3 className="text-sm font-medium text-gray-300 mb-2">Debug Information</h3>
+          <pre className="text-xs overflow-auto max-h-48 bg-[#1e1e1e] p-2 rounded text-gray-300">
             {debugMessage}
           </pre>
-        </ActionCard>
+        </div>
       )}
     </div>
   );
 }
 
-// Integrated example showcasing our components together
+// Story 5: VS Code-like Integrated Environment
 export const IntegratedWebContainer: Story = {
-  name: 'Integrated WebContainer Environment',
+  name: 'VS Code-like Integrated Environment',
   render: () => {
     const webContainer = useWebContainer();
     const [terminalMessage, setTerminalMessage] = useState<string>('');
-    const [activeTab, setActiveTab] = useState<'files' | 'terminal'>('files');
+    const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
+    const [expandedPaths, setExpandedPaths] = useState<string[]>(['/']);
+    const [fileContent, setFileContent] = useState<string>('');
+    const [loading, setLoading] = useState(false);
+
+    const {
+      buildFileTree,
+      loadFile,
+      saveFile,
+      error,
+      isLoading: isFileOpLoading
+    } = useFileOperations(webContainer);
+
+    const [fileTree, setFileTree] = useState<any[]>([]);
+
+    useEffect(() => {
+      if (webContainer) {
+        refreshFiles();
+      }
+    }, [webContainer]);
+
+    const refreshFiles = async () => {
+      setLoading(true);
+      try {
+        const tree = await buildFileTree();
+        setFileTree(tree);
+        if (!expandedPaths.includes('/')) {
+          setExpandedPaths(['/']);
+        }
+      } catch (err) {
+        console.error('Error building file tree:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const handleFileSelection = async (paths: string[]) => {
+      setSelectedPaths(paths);
+      if (paths.length > 0) {
+        try {
+          const content = await loadFile(paths[0]);
+          setFileContent(content);
+        } catch (err) {
+          console.error(`Error loading file ${paths[0]}:`, err);
+        }
+      }
+    };
+
+    const handleSaveFile = async () => {
+      if (selectedPaths.length > 0) {
+        await saveFile(selectedPaths[0], fileContent);
+      }
+    };
 
     const handleTerminalInitialized = () => {
-      setTerminalMessage('Terminal initialized and ready for commands!');
+      setTerminalMessage('Terminal ready');
     };
 
     const handleTerminalError = (error: any) => {
-      setTerminalMessage(`Terminal error: ${error.message || String(error)}`);
+      setTerminalMessage(`Error: ${error.message || String(error)}`);
     };
 
     return (
-      <div className="p-4 bg-gray-50 min-h-screen">
-        <h2 className="text-2xl font-bold mb-6">WebContainer Development Environment</h2>
-        
-        <div className="mb-4 flex border-b border-gray-200">
-          <button
-            className={`py-2 px-4 font-medium ${activeTab === 'files' 
-              ? 'border-b-2 border-blue-500 text-blue-600' 
-              : 'text-gray-500 hover:text-gray-700'}`}
-            onClick={() => setActiveTab('files')}
-          >
-            File Browser
-          </button>
-          <button
-            className={`py-2 px-4 font-medium ${activeTab === 'terminal' 
-              ? 'border-b-2 border-blue-500 text-blue-600' 
-              : 'text-gray-500 hover:text-gray-700'}`}
-            onClick={() => setActiveTab('terminal')}
-          >
-            Terminal
-          </button>
+      <div className="h-screen w-full bg-[#1e1e1e] text-white overflow-hidden">
+        <div className="h-6 bg-[#323233] flex items-center px-2 text-sm">
+          <span className="text-gray-400">WebContainer IDE</span>
         </div>
         
-        {activeTab === 'files' && (
-          <ActionCard
-            title="File Management"
-            description="Browse, edit, and manage files in your WebContainer environment"
-            fullHeight
-          >
-            <FileBrowser />
-          </ActionCard>
-        )}
-        
-        {activeTab === 'terminal' && (
-          <ActionCard
-            title="Interactive Terminal"
-            description={terminalMessage || "Run commands in your WebContainer environment"}
-            fullHeight
-          >
-            <WebTerminal
-              webContainer={webContainer}
-              height={500}
-              initialCommands={[
-                'ls -la',
-                'echo "Welcome to your WebContainer terminal!"',
-                'echo "You can run any shell commands here."',
-              ]}
-              onInitialized={handleTerminalInitialized}
-              onError={handleTerminalError}
-            />
-          </ActionCard>
-        )}
+        <ResizablePanelGroup direction="horizontal">
+          {/* File Explorer Panel */}
+          <ResizablePanel defaultSize={20} minSize={15}>
+            <div className="h-full bg-[#252526] flex flex-col">
+              <div className="p-2 text-sm font-medium border-b border-[#323233]">
+                EXPLORER
+              </div>
+              <div className="flex-1 overflow-auto">
+                <FileBrowserToolbar
+                  webContainer={webContainer}
+                  selectedPaths={selectedPaths}
+                  onRefresh={refreshFiles}
+                  isLoading={loading}
+                  onFileCreated={refreshFiles}
+                  onDirectoryCreated={refreshFiles}
+                  onDelete={refreshFiles}
+                  className="border-b border-[#323233] p-2"
+                />
+                {loading ? (
+                  <LoadingIndicator message="Loading..." variant="spinner" className="m-4" />
+                ) : (
+                  <div className="p-2">
+                    <FileSystemTree
+                      files={fileTree}
+                      selectedPaths={selectedPaths}
+                      expandedPaths={expandedPaths}
+                      onSelectionChange={handleFileSelection}
+                      onExpandedChange={setExpandedPaths}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </ResizablePanel>
+
+          <ResizableHandle withHandle />
+
+          {/* Editor and Terminal Panel */}
+          <ResizablePanel defaultSize={80}>
+            <ResizablePanelGroup direction="vertical">
+              {/* Editor Panel */}
+              <ResizablePanel defaultSize={70}>
+                <div className="h-full bg-[#1e1e1e] flex flex-col">
+                  {selectedPaths.length > 0 ? (
+                    <>
+                      <div className="bg-[#2d2d2d] p-2 text-sm flex justify-between items-center">
+                        <span>{selectedPaths[0]}</span>
+                        <button
+                          className="px-2 py-1 text-xs bg-[#0e639c] hover:bg-[#1177bb] rounded"
+                          onClick={handleSaveFile}
+                          disabled={isFileOpLoading}
+                        >
+                          Save
+                        </button>
+                      </div>
+                      <div className="flex-1">
+                        <FileEditor
+                          content={fileContent}
+                          onChange={setFileContent}
+                          path={selectedPaths[0]}
+                          height="100%"
+                          theme="vs-dark"
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-gray-400">
+                      Select a file from the explorer to start editing
+                    </div>
+                  )}
+                </div>
+              </ResizablePanel>
+
+              <ResizableHandle withHandle />
+
+              {/* Terminal Panel */}
+              <ResizablePanel defaultSize={30}>
+                <div className="h-full bg-[#1e1e1e] flex flex-col">
+                  <div className="bg-[#2d2d2d] p-2 text-sm">
+                    TERMINAL {terminalMessage && `- ${terminalMessage}`}
+                  </div>
+                  <div className="flex-1">
+                    <WebTerminal
+                      webContainer={webContainer}
+                      height="100%"
+                      initialCommands={[
+                        'echo "Welcome to WebContainer Terminal"',
+                        'ls -la'
+                      ]}
+                      onInitialized={handleTerminalInitialized}
+                      onError={handleTerminalError}
+                      className="h-full"
+                    />
+                  </div>
+                </div>
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </div>
     );
   }

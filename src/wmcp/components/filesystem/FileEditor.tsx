@@ -50,7 +50,7 @@ export function FileEditor({
   };
 
   return (
-    <div className={`border rounded-md overflow-hidden ${className}`}>
+    <div className={`border rounded-md overflow-hidden h-full ${className}`}>
       <Editor
         height={height}
         language={detectedLanguage}

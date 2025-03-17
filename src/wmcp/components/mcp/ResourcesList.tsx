@@ -41,28 +41,28 @@ export function ResourcesList({
 }: ResourcesListProps) {
   return (
     <div className={`border rounded-md overflow-hidden ${className}`}>
-      <div className="bg-gray-100 px-4 py-2 font-medium border-b">
+      <div className="bg-gray-100 dark:bg-zinc-800 text-gray-800 dark:text-gray-200 px-4 py-2 font-medium border-b">
         Available Resources
       </div>
       <div className={`p-2 overflow-y-auto`} style={{ maxHeight }}>
         {isLoading ? (
-          <div className="p-3 text-gray-500">{loadingMessage}</div>
+          <div className="p-3 text-gray-500 dark:text-gray-400">{loadingMessage}</div>
         ) : resources.length === 0 ? (
-          <div className="p-3 text-gray-500">{emptyMessage}</div>
+          <div className="p-3 text-gray-500 dark:text-gray-400">{emptyMessage}</div>
         ) : (
           <ul className="divide-y">
             {resources.map(resource => (
               <li 
                 key={resource.uri}
-                className={`p-2 ${onSelectResource ? 'cursor-pointer hover:bg-gray-100' : ''} ${
+                className={`p-2 ${onSelectResource ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-700' : ''} ${
                   selectedResource?.uri === resource.uri ? 'bg-blue-50' : ''
                 }`}
                 onClick={() => onSelectResource && onSelectResource(resource)}
               >
-                <div className="font-medium">{resource.name}</div>
-                <div className="text-sm text-gray-600 truncate">{resource.uri}</div>
+                <div className="font-medium text-gray-800 dark:text-gray-200">{resource.name}</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400 truncate">{resource.uri}</div>
                 {resource.description && (
-                  <div className="text-sm text-gray-500 mt-1">{resource.description}</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">{resource.description}</div>
                 )}
               </li>
             ))}

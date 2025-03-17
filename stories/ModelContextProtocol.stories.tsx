@@ -50,7 +50,7 @@ const StatusIndicator = ({ status }: { status: MCPServerStatus }) => {
   return (
     <div className="flex items-center">
       <div className={`w-3 h-3 rounded-full mr-2 ${statusColors[status]}`}></div>
-      <span className="text-sm font-medium">{statusLabels[status]}</span>
+      <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{statusLabels[status]}</span>
     </div>
   );
 };
@@ -76,8 +76,8 @@ const MCPDemo = ({
   // Pass the serverConfigs to the children as a render prop
   return (
     <div className="p-4 max-w-6xl mx-auto">
-      <h1 className="text-2xl font-bold mb-2">{title}</h1>
-      <p className="mb-4 text-gray-600">{description}</p>
+      <h1 className="text-2xl font-bold mb-2 text-gray-800 dark:text-gray-200">{title}</h1>
+      <p className="mb-4 text-gray-600 dark:text-gray-400">{description}</p>
       
       {React.Children.map(children, child => 
         React.isValidElement(child) 
@@ -112,7 +112,7 @@ function BasicSetupContent({ serverConfigs = {
   
   return (
     <div className="p-4 border rounded-md">
-      <h2 className="text-lg font-semibold mb-4">MCP Server Status</h2>
+      <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-gray-200">MCP Server Status</h2>
       <div className="mb-4">
         <StatusIndicator status={status} />
       </div>
@@ -208,7 +208,7 @@ function ToolExecutionForm({
 
     return (
       <div key={name} className="border rounded-md p-3 mb-3">
-        <div className="font-medium mb-2">{name}</div>
+        <div className="font-medium mb-2 text-gray-800 dark:text-gray-200">{name}</div>
         <div className="mb-3">
           <label className="text-sm font-medium">
             Select {isOneOf ? 'one of' : 'any of'} these variants:
@@ -287,7 +287,7 @@ function ToolExecutionForm({
       case 'object':
         return (
           <div key={name} className="border rounded-md p-3 mb-2">
-            {!isNested && <div className="font-medium mb-2">{name}</div>}
+            {!isNested && <div className="font-medium mb-2 text-gray-800 dark:text-gray-200">{name}</div>}
             <TextField
               label={property.title || 'JSON Object'}
               description={description}
@@ -307,7 +307,7 @@ function ToolExecutionForm({
       case 'array':
         return (
           <div key={name} className="border rounded-md p-3 mb-2">
-            {!isNested && <div className="font-medium mb-2">{name}</div>}
+            {!isNested && <div className="font-medium mb-2 text-gray-800 dark:text-gray-200">{name}</div>}
             <TextField
               label={property.title || 'JSON Array'}
               description={description}
@@ -410,7 +410,7 @@ function ToolExecutionForm({
       case 'object':
         return (
           <div key={name} className="border rounded-md p-3 mb-2">
-            <div className="font-medium mb-2">{name}{isRequired ? ' *' : ''}</div>
+            <div className="font-medium mb-2 text-gray-800 dark:text-gray-200">{name}{isRequired ? ' *' : ''}</div>
             <TextField
               label={`${name} (JSON)`}
               description={description}
@@ -431,7 +431,7 @@ function ToolExecutionForm({
       case 'array':
         return (
           <div key={name} className="border rounded-md p-3 mb-2">
-            <div className="font-medium mb-2">{name}{isRequired ? ' *' : ''}</div>
+            <div className="font-medium mb-2 text-gray-800 dark:text-gray-200">{name}{isRequired ? ' *' : ''}</div>
             <TextField
               label={`${name} (JSON array)`}
               description={description}
@@ -563,7 +563,7 @@ function ToolsExampleContent({ serverConfigs = {
   return (
     <div className="p-4 border rounded-md">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-lg font-semibold">MCP Tools</h2>
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">MCP Tools</h2>
         <div className="flex items-center space-x-2">
           <StatusIndicator status={status} />
           <button 
@@ -586,24 +586,24 @@ function ToolsExampleContent({ serverConfigs = {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         {/* Left Column - Tools List */}
         <div className="border rounded-md overflow-hidden">
-          <div className="bg-gray-100 px-4 py-2 font-medium border-b">
+          <div className="bg-gray-100 dark:bg-zinc-800 text-gray-800 dark:text-gray-200 px-4 py-2 font-medium border-b">
             Available Tools
           </div>
           <div className="p-2 max-h-60 overflow-y-auto">
             {status !== 'READY' ? (
-              <div className="p-3 text-gray-500">Loading tools...</div>
+              <div className="p-3 text-gray-500 dark:text-gray-400">Loading tools...</div>
             ) : tools.length === 0 ? (
-              <div className="p-3 text-gray-500">No tools available</div>
+              <div className="p-3 text-gray-500 dark:text-gray-400">No tools available</div>
             ) : (
               <ul className="divide-y">
                 {tools.map((tool: Tool) => (
                   <li 
                     key={tool.name}
-                    className={`p-2 cursor-pointer hover:bg-gray-100 ${selectedTool?.name === tool.name ? 'bg-blue-50' : ''}`}
+                    className={`p-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-700 ${selectedTool?.name === tool.name ? 'bg-blue-50 dark:bg-zinc-700' : ''}`}
                     onClick={() => setSelectedTool(tool)}
                   >
-                    <div className="font-medium">{tool.name}</div>
-                    <div className="text-sm text-gray-600">{tool.description}</div>
+                    <div className="font-medium text-gray-800 dark:text-gray-200">{tool.name}</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">{tool.description}</div>
                   </li>
                 ))}
               </ul>
@@ -613,14 +613,14 @@ function ToolsExampleContent({ serverConfigs = {
         
         {/* Right Column - Tool Execution */}
         <div className="border rounded-md overflow-hidden">
-          <div className="bg-gray-100 px-4 py-2 font-medium border-b">
+          <div className="bg-gray-100 dark:bg-zinc-800 text-gray-800 dark:text-gray-200 px-4 py-2 font-medium border-b">
             Tool Execution
           </div>
           <div className="p-4">
             {selectedTool ? (
               <>
-                <h3 className="font-medium mb-2">{selectedTool.name}</h3>
-                <p className="text-sm text-gray-600 mb-3">{selectedTool.description}</p>
+                <h3 className="font-medium mb-2 text-gray-800 dark:text-gray-200">{selectedTool.name}</h3>
+                <p className="text-sm text-gray-600 mb-3 dark:text-gray-400">{selectedTool.description}</p>
                 
                 <ToolExecutionForm 
                   tool={selectedTool} 
@@ -705,7 +705,7 @@ function ResourcesExampleContent({ serverConfigs = {
   return (
     <div className="p-4 border rounded-md">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-lg font-semibold">MCP Resources</h2>
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">MCP Resources</h2>
         <div className="flex items-center space-x-2">
           <StatusIndicator status={status} />
           <button 
@@ -728,7 +728,7 @@ function ResourcesExampleContent({ serverConfigs = {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         {/* Left Column - Resources List */}
         <div className="border rounded-md overflow-hidden">
-          <div className="bg-gray-100 px-4 py-2 font-medium border-b">
+          <div className="bg-gray-100 dark:bg-zinc-800 text-gray-800 dark:text-gray-200 px-4 py-2 font-medium border-b">
             Available Resources
           </div>
           <div className="p-2 max-h-60 overflow-y-auto">
@@ -741,13 +741,13 @@ function ResourcesExampleContent({ serverConfigs = {
                 {resources.map((resource: Resource) => (
                   <li 
                     key={resource.uri}
-                    className={`p-2 cursor-pointer hover:bg-gray-100 ${selectedResource?.uri === resource.uri ? 'bg-blue-50' : ''}`}
+                    className={`p-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-700 ${selectedResource?.uri === resource.uri ? 'bg-blue-50 bg-zinc-800' : ''}`}
                     onClick={() => setSelectedResource(resource)}
                   >
-                    <div className="font-medium">{resource.name}</div>
-                    <div className="text-sm text-gray-600 truncate">{resource.uri}</div>
+                    <div className="font-medium text-gray-800 dark:text-gray-200">{resource.name}</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 truncate">{resource.uri}</div>
                     {resource.description && (
-                      <div className="text-sm text-gray-500 mt-1">{resource.description}</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">{resource.description}</div>
                     )}
                   </li>
                 ))}
@@ -758,14 +758,14 @@ function ResourcesExampleContent({ serverConfigs = {
         
         {/* Right Column - Resource Content */}
         <div className="border rounded-md overflow-hidden">
-          <div className="bg-gray-100 px-4 py-2 font-medium border-b">
+          <div className="bg-gray-100 dark:bg-zinc-800 text-gray-800 dark:text-gray-200 px-4 py-2 font-medium border-b">
             Resource Content
           </div>
           <div className="p-4">
             {selectedResource ? (
               <>
-                <h3 className="font-medium mb-2">{selectedResource.name}</h3>
-                <p className="text-sm text-gray-600 mb-1">URI: {selectedResource.uri}</p>
+                <h3 className="font-medium mb-2 text-gray-800 dark:text-gray-200">{selectedResource.name}</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">URI: {selectedResource.uri}</p>
                 
                 <div className="flex justify-end mb-3">
                   <button
@@ -788,7 +788,7 @@ function ResourcesExampleContent({ serverConfigs = {
                     ))}
                   </div>
                 ) : (
-                  <div className="bg-gray-50 border rounded-md p-3 text-center text-gray-500">
+                  <div className="bg-gray-50 border rounded-md p-3 text-center text-gray-500 dark:bg-zinc-900 dark:text-gray-400">
                     {isFetching ? 'Loading resource content...' : 'Click "Fetch Content" to view the resource'}
                   </div>
                 )}
@@ -848,7 +848,7 @@ function MultiServerExampleContent({ serverConfigs = {
   return (
     <div className="p-4 border rounded-md">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-lg font-semibold">Multiple MCP Servers</h2>
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Multiple MCP Servers</h2>
         <StatusIndicator status={status} />
       </div>
       
@@ -862,7 +862,7 @@ function MultiServerExampleContent({ serverConfigs = {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Tools from both servers */}
         <div className="border rounded-md overflow-hidden">
-          <div className="bg-gray-100 px-4 py-2 font-medium border-b">
+          <div className="bg-gray-100 dark:bg-zinc-800 text-gray-800 dark:text-gray-200 px-4 py-2 font-medium border-b">
             Tools from All Servers
           </div>
           <div className="p-2 max-h-60 overflow-y-auto">
@@ -874,8 +874,8 @@ function MultiServerExampleContent({ serverConfigs = {
               <ul className="divide-y">
                 {tools.map((tool: Tool) => (
                   <li key={tool.name} className="p-2">
-                    <div className="font-medium">{tool.name}</div>
-                    <div className="text-sm text-gray-600">{tool.description}</div>
+                    <div className="font-medium text-gray-800 dark:text-gray-200">{tool.name}</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">{tool.description}</div>
                   </li>
                 ))}
               </ul>
@@ -885,7 +885,7 @@ function MultiServerExampleContent({ serverConfigs = {
         
         {/* Resources from both servers */}
         <div className="border rounded-md overflow-hidden">
-          <div className="bg-gray-100 px-4 py-2 font-medium border-b">
+          <div className="bg-gray-100 dark:bg-zinc-800 text-gray-800 dark:text-gray-200 px-4 py-2 font-medium border-b">
             Resources from All Servers
           </div>
           <div className="p-2 max-h-60 overflow-y-auto">
@@ -897,8 +897,8 @@ function MultiServerExampleContent({ serverConfigs = {
               <ul className="divide-y">
                 {resources.map((resource: Resource) => (
                   <li key={resource.uri} className="p-2">
-                    <div className="font-medium">{resource.name}</div>
-                    <div className="text-sm text-gray-600 truncate">{resource.uri}</div>
+                    <div className="font-medium text-gray-800 dark:text-gray-200">{resource.name}</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 truncate">{resource.uri}</div>
                   </li>
                 ))}
               </ul>
@@ -940,7 +940,7 @@ function DirectHookUsageContent() {
   return (
     <div className="p-4 border rounded-md">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-lg font-semibold">Direct Hook Usage</h2>
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Direct Hook Usage</h2>
         <StatusIndicator status={status} />
       </div>
       
@@ -951,8 +951,8 @@ function DirectHookUsageContent() {
         </div>
       )}
       
-      <div className="bg-gray-100 p-3 rounded-md mb-4">
-        <p className="text-sm text-gray-700">
+      <div className="bg-gray-100 dark:bg-zinc-800 p-3 rounded-md mb-4">
+        <p className="text-sm text-gray-700 dark:text-gray-300">
           This example shows that you can use the <code className="bg-gray-200 px-1 rounded">useMCPServer</code> hook 
           directly in your components. This is useful when you want different parts of 
           your app to connect to different MCP servers.
@@ -960,7 +960,7 @@ function DirectHookUsageContent() {
       </div>
       
       <div className="border rounded-md overflow-hidden">
-        <div className="bg-gray-100 px-4 py-2 font-medium border-b">
+        <div className="bg-gray-100 dark:bg-zinc-800 text-gray-800 dark:text-gray-200 px-4 py-2 font-medium border-b">
           Tools from Direct Hook
         </div>
         <div className="p-2 max-h-60 overflow-y-auto">
@@ -972,8 +972,8 @@ function DirectHookUsageContent() {
             <ul className="divide-y">
               {tools.map((tool: Tool) => (
                 <li key={tool.name} className="p-2">
-                  <div className="font-medium">{tool.name}</div>
-                  <div className="text-sm text-gray-600">{tool.description}</div>
+                  <div className="font-medium text-gray-800 dark:text-gray-200">{tool.name}</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">{tool.description}</div>
                 </li>
               ))}
             </ul>
@@ -1037,12 +1037,12 @@ function ResourceViewer() {
 
   return (
     <div className="p-4">
-      <h2 className="text-xl font-semibold mb-4">Resource Viewer</h2>
+      <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-200">Resource Viewer</h2>
       <StatusIndicator status={status} />
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-        <div className="border rounded-md bg-white p-4 shadow-sm">
-          <h3 className="font-medium mb-3">Available Resources</h3>
+        <div className="border rounded-md bg-white dark:bg-zinc-900 p-4 shadow-sm">
+          <h3 className="font-medium mb-3 text-gray-800 dark:text-gray-200">Available Resources</h3>
           
           {resources.length === 0 ? (
             <div className="text-gray-500 text-center p-4">
@@ -1053,16 +1053,16 @@ function ResourceViewer() {
               {resources.map((resource: Resource) => (
                 <li 
                   key={resource.name}
-                  className={`p-2 rounded-md cursor-pointer hover:bg-gray-100 ${
-                    selectedResource === resource.name ? 'bg-blue-100 hover:bg-blue-100' : ''
+                  className={`p-2 rounded-md cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800 ${
+                    selectedResource === resource.name ? 'bg-blue-100 hover:bg-blue-100 dark:bg-blue-900 dark:hover:bg-blue-900' : ''
                   }`}
                   onClick={() => {
                     setSelectedResource(resource.name);
                     setResourceContent(null);
                   }}
                 >
-                  <div className="font-medium">{resource.name}</div>
-                  <div className="text-xs text-gray-600">{resource.description || 'No description'}</div>
+                  <div className="font-medium text-gray-800 dark:text-gray-200">{resource.name}</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">{resource.description || 'No description'}</div>
                 </li>
               ))}
             </ul>
@@ -1093,20 +1093,20 @@ function ResourceViewer() {
                 <div>
                   {resourceContent.contents.map((content, index) => (
                     <div key={index} className="mb-3">
-                      <pre className="p-2 bg-gray-100 border rounded-md text-sm overflow-auto max-h-60">
+                      <pre className="p-2 bg-gray-100 dark:bg-zinc-900 border rounded-md text-sm overflow-auto max-h-60">
                         {content.text}
                       </pre>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="bg-gray-50 border rounded-md p-3 text-center text-gray-500">
+                <div className="bg-gray-50 border rounded-md p-3 text-center text-gray-500 dark:bg-zinc-900 dark:text-gray-400">
                   Click "Fetch Content" to view the resource
                 </div>
               )
             )
           ) : (
-            <div className="text-gray-500 text-center p-4">
+            <div className="text-gray-500 text-center p-4 dark:text-gray-400">
               Select a resource from the list to view its content
             </div>
           )}
