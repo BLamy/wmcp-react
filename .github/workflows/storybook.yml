@@ -52,7 +52,7 @@ jobs:
           if [ -f "storybook-static/gh-pages-coi-sw.js" ]; then echo "✓ gh-pages-coi-sw.js"; else echo "✗ gh-pages-coi-sw.js is missing!"; exit 1; fi
       
       - name: Setup Pages
-        uses: actions/configure-pages@v4
+        uses: actions/configure-pages@v5
       
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
