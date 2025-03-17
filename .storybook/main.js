@@ -12,8 +12,6 @@ const excludedProps = new Set([
   'onInput'
 ]);
 
-import sharedArrayBufferPlugin from './shared-array-buffer-plugin';
-
 /** @type { import('@storybook/react-vite').StorybookConfig } */
 const config = {
   stories: [
@@ -85,10 +83,7 @@ const config = {
     
     // Add custom Rollup plugin to inject headers into HTML files
     config.plugins = config.plugins || [];
-    
-    // Add our SharedArrayBuffer plugin that works in both dev and production
-    // config.plugins.push(sharedArrayBufferPlugin());
-    
+
     // Ignore "use client" directive warnings
     config.build.rollupOptions.onwarn = (warning, defaultHandler) => {
       if (warning.code === 'MODULE_LEVEL_DIRECTIVE' && 
