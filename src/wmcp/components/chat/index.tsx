@@ -622,12 +622,13 @@ function ApiKeyAlertDialog({ apiKey, onChange, isOpen, activeServers }: ApiKeyAl
         }
       >
         <p className="text-gray-600 dark:text-gray-400 mb-4">
-          Please provide your Anthropic API key to use Claude directly, or configure MCP servers.
-          This key will be stored only in your browser's memory.
+          Please provide your Anthropic API key to use Claude directly.
+          This key will not be stored anywhere.
         </p>
         
         <div className="mb-6">
           <TextField
+            type="password"
             label="API Key"
             value={inputValue}
             onChange={setInputValue}

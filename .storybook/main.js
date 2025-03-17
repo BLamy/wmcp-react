@@ -87,7 +87,7 @@ const config = {
     config.plugins = config.plugins || [];
     
     // Add our SharedArrayBuffer plugin that works in both dev and production
-    config.plugins.push(sharedArrayBufferPlugin());
+    // config.plugins.push(sharedArrayBufferPlugin());
     
     // Ignore "use client" directive warnings
     config.build.rollupOptions.onwarn = (warning, defaultHandler) => {

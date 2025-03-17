@@ -1,5 +1,4 @@
 import '../src/index.css';
-import '../public/check-headers.js';
 import React from 'react';
 // import { withThemeByClassName } from '@storybook/addon-themes';
 import WebContainerProvider from '../src/wmcp/providers/Webcontainer';
