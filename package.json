@@ -32,7 +32,8 @@
     "tailwindcss-react-aria-components": "^1.0.0",
     "typescript": "5.3.3",
     "vite": "^6.2.2",
-    "vitest": "^3.0.9"
+    "vitest": "^3.0.9",
+    "wait-on": "^7.2.0"
   },
   "scripts": {
     "storybook": "storybook dev -p 6006",
