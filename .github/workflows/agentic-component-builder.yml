@@ -1,0 +1,332 @@
+name: Agentic Component Builder
+
+on:
+  issues:
+    types: [opened, labeled]
+
+jobs:
+  build-component:
+    if: contains(github.event.issue.labels.*.name, 'component-request')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Extract component requirements
+        id: extract
+        run: |
+          ISSUE_BODY="${{ github.event.issue.body }}"
+          COMPONENT_NAME="${{ github.event.issue.title }}"
+          COMPONENT_NAME=$(echo "$COMPONENT_NAME" | sed 's/[^a-zA-Z0-9]//g')
+          echo "component_name=$COMPONENT_NAME" >> $GITHUB_OUTPUT
+          echo "$ISSUE_BODY" > issue_body.md
+          
+      - name: Create branch
+        run: |
+          BRANCH_NAME="component/${{ steps.extract.outputs.component_name }}"
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          git checkout -b $BRANCH_NAME
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+
+      - name: Setup Playwright
+        uses: microsoft/playwright-github-action@v1
+
+      - name: Design component API
+        id: design-api
+        run: |
+          # Using OpenAI API to design the component API based on issue description
+          RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.OPENAI_API_KEY }}" \
+            -d '{
+              "model": "gpt-4",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are an expert React component API designer. Given a component description, you will output a TypeScript interface for the component props. Output only the interface code, no explanations."
+                },
+                {
+                  "role": "user",
+                  "content": "Design a React component API based on this description: $(cat issue_body.md)"
+                }
+              ]
+            }')
+          
+          COMPONENT_API=$(echo $RESPONSE | jq -r '.choices[0].message.content')
+          echo "$COMPONENT_API" > component_api.ts
+          echo "Component API designed successfully"
+          
+      - name: Create component stub
+        id: create-stub
+        run: |
+          # Using OpenAI API to create the component stub
+          RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.OPENAI_API_KEY }}" \
+            -d '{
+              "model": "gpt-4",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are an expert React component developer. Given a component API interface, create a styleless component stub that renders all serializable values and lists the keys of non-serializable values."
+                },
+                {
+                  "role": "user",
+                  "content": "Create a React component stub based on this API: $(cat component_api.ts)"
+                }
+              ]
+            }')
+          
+          COMPONENT_STUB=$(echo $RESPONSE | jq -r '.choices[0].message.content')
+          mkdir -p src/components
+          COMPONENT_PATH="src/components/${{ steps.extract.outputs.component_name }}.tsx"
+          echo "$COMPONENT_STUB" > $COMPONENT_PATH
+          echo "COMPONENT_PATH=$COMPONENT_PATH" >> $GITHUB_ENV
+          echo "Component stub created at $COMPONENT_PATH"
+      
+      - name: Create unit tests
+        run: |
+          # Using OpenAI API to create unit tests
+          RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.OPENAI_API_KEY }}" \
+            -d '{
+              "model": "gpt-4",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are an expert in React testing with Vitest and React Testing Library. Create comprehensive unit tests for a React component."
+                },
+                {
+                  "role": "user",
+                  "content": "Create unit tests for this component: $(cat $COMPONENT_PATH)"
+                }
+              ]
+            }')
+          
+          COMPONENT_TESTS=$(echo $RESPONSE | jq -r '.choices[0].message.content')
+          TEST_PATH="src/components/${{ steps.extract.outputs.component_name }}.test.tsx"
+          echo "$COMPONENT_TESTS" > $TEST_PATH
+          echo "Unit tests created at $TEST_PATH"
+      
+      - name: Run unit tests with coverage
+        id: unit-tests
+        run: |
+          npm run test:coverage
+          
+          # Save the coverage report for artifacts
+          mkdir -p test-artifacts
+          cp -r coverage test-artifacts/
+      
+      - name: Implement component with value annotations
+        run: |
+          # Using OpenAI API to implement the component with value annotations
+          RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.OPENAI_API_KEY }}" \
+            -d '{
+              "model": "gpt-4",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are an expert React component developer. Implement a component with value annotations at the end of each line (// valueAtFirstIteration, valueAtSecondIteration...) to help with debugging. The component should pass all the unit tests."
+                },
+                {
+                  "role": "user",
+                  "content": "Implement this component to pass these tests: $(cat $TEST_PATH)\n\nOriginal component stub: $(cat $COMPONENT_PATH)"
+                }
+              ]
+            }')
+          
+          COMPONENT_IMPL=$(echo $RESPONSE | jq -r '.choices[0].message.content')
+          echo "$COMPONENT_IMPL" > $COMPONENT_PATH
+          echo "Component implemented with value annotations"
+      
+      - name: Run unit tests again to verify implementation
+        run: npm run test
+      
+      - name: Create Storybook story
+        run: |
+          # Using OpenAI API to create a Storybook story
+          RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.OPENAI_API_KEY }}" \
+            -d '{
+              "model": "gpt-4",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are an expert in Storybook for React. Create a comprehensive story for a React component following the project's Storybook patterns."
+                },
+                {
+                  "role": "user",
+                  "content": "Create a Storybook story for this component: $(cat $COMPONENT_PATH)"
+                }
+              ]
+            }')
+          
+          STORYBOOK_STORY=$(echo $RESPONSE | jq -r '.choices[0].message.content')
+          STORY_PATH="stories/${{ steps.extract.outputs.component_name }}.stories.tsx"
+          echo "$STORYBOOK_STORY" > $STORY_PATH
+          echo "Storybook story created at $STORY_PATH"
+      
+      - name: Build Storybook
+        run: npm run build-storybook
+      
+      - name: Take screenshot of component in Storybook
+        run: |
+          npx concurrently -k -s first -n "SB,TEST" \
+            "npx http-server storybook-static --port 6006 --silent" \
+            "npx wait-on tcp:6006 && npx playwright test --grep '${{ steps.extract.outputs.component_name }}'"
+          
+          # Save screenshots for artifacts
+          mkdir -p test-artifacts/screenshots
+          cp -r test-results/*/*.png test-artifacts/screenshots/ || true
+      
+      - name: Create Playwright tests
+        run: |
+          # Using OpenAI API to create Playwright tests
+          RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.OPENAI_API_KEY }}" \
+            -d '{
+              "model": "gpt-4",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are an expert in Playwright testing for React components. Create comprehensive Playwright tests for a component."
+                },
+                {
+                  "role": "user",
+                  "content": "Create Playwright tests for this component in Storybook: $(cat $STORY_PATH)\n\nComponent implementation: $(cat $COMPONENT_PATH)"
+                }
+              ]
+            }')
+          
+          PLAYWRIGHT_TESTS=$(echo $RESPONSE | jq -r '.choices[0].message.content')
+          PW_TEST_PATH="tests/${{ steps.extract.outputs.component_name }}.component.spec.ts"
+          echo "$PLAYWRIGHT_TESTS" > $PW_TEST_PATH
+          echo "Playwright tests created at $PW_TEST_PATH"
+      
+      - name: Run Playwright tests
+        id: pw-tests
+        run: |
+          npx concurrently -k -s first -n "SB,TEST" \
+            "npx http-server storybook-static --port 6006 --silent" \
+            "npx wait-on tcp:6006 && npx playwright test ${{ steps.extract.outputs.component_name }}.component.spec.ts"
+        continue-on-error: true
+      
+      - name: Debug test failures
+        if: steps.pw-tests.outcome != 'success'
+        run: |
+          # If tests failed, try to diagnose using Gemini API
+          
+          # Collect test failure videos and logs
+          mkdir -p test-artifacts/videos
+          cp -r test-results/*/*.webm test-artifacts/videos/ || true
+          
+          # Using Gemini API to diagnose failures
+          RESPONSE=$(curl -s https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.GEMINI_API_KEY }}" \
+            -d '{
+              "contents": [
+                {
+                  "role": "user",
+                  "parts": [
+                    {
+                      "text": "Diagnose these Playwright test failures and suggest fixes:\n\nTest file: $(cat $PW_TEST_PATH)\n\nComponent: $(cat $COMPONENT_PATH)"
+                    }
+                  ]
+                }
+              ]
+            }')
+          
+          DIAGNOSIS=$(echo $RESPONSE | jq -r '.candidates[0].content.parts[0].text')
+          echo "Test Failure Diagnosis: $DIAGNOSIS" > test-artifacts/diagnosis.md
+      
+      - name: Iterate on component
+        if: steps.pw-tests.outcome != 'success'
+        run: |
+          # Using OpenAI API to improve the component based on test failures
+          RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.OPENAI_API_KEY }}" \
+            -d '{
+              "model": "gpt-4",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are an expert React component developer. Fix a component to pass the failing tests."
+                },
+                {
+                  "role": "user",
+                  "content": "Fix this component to pass these tests: $(cat $PW_TEST_PATH)\n\nCurrent component: $(cat $COMPONENT_PATH)\n\nTest failure diagnosis: $(cat test-artifacts/diagnosis.md)"
+                }
+              ]
+            }')
+          
+          IMPROVED_COMPONENT=$(echo $RESPONSE | jq -r '.choices[0].message.content')
+          echo "$IMPROVED_COMPONENT" > $COMPONENT_PATH
+          echo "Component improved based on test failures"
+          
+          # Run Playwright tests again
+          npx concurrently -k -s first -n "SB,TEST" \
+            "npx http-server storybook-static --port 6006 --silent" \
+            "npx wait-on tcp:6006 && npx playwright test ${{ steps.extract.outputs.component_name }}.component.spec.ts"
+      
+      - name: Commit changes and create pull request
+        run: |
+          git add src/components/${{ steps.extract.outputs.component_name }}.tsx
+          git add src/components/${{ steps.extract.outputs.component_name }}.test.tsx
+          git add stories/${{ steps.extract.outputs.component_name }}.stories.tsx
+          git add tests/${{ steps.extract.outputs.component_name }}.component.spec.ts
+          git commit -m "Add ${{ steps.extract.outputs.component_name }} component"
+          git push --set-upstream origin $BRANCH_NAME
+          
+          # Create PR with results summary
+          PR_BODY="This PR adds the ${{ steps.extract.outputs.component_name }} component as requested in issue #${{ github.event.issue.number }}.
+
+          ## Component API
+          \`\`\`typescript
+          $(cat component_api.ts)
+          \`\`\`
+
+          ## Test Results
+          - Unit Tests: ${{ steps.unit-tests.outcome == 'success' && '✅ Passing' || '❌ Failing' }}
+          - Playwright Tests: ${{ steps.pw-tests.outcome == 'success' && '✅ Passing' || '❌ Failing' }}
+
+          ## Artifacts
+          - Test coverage report
+          - Component screenshots
+          - Test videos (if tests failed)
+          "
+          
+          PR_URL=$(gh pr create --title "Add ${{ steps.extract.outputs.component_name }} component" --body "$PR_BODY" --base main --head $BRANCH_NAME)
+          echo "PR created: $PR_URL"
+          
+          # Comment on the issue
+          gh issue comment ${{ github.event.issue.number }} --body "Component implementation started! Check out the PR: $PR_URL"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: component-artifacts
+          path: test-artifacts/ 

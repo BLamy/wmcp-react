@@ -1,6 +1,7 @@
+import type { Meta, StoryObj } from '@storybook/react';
 import { Button } from '../src/Button';
 
-export default {
+const meta = {
   title: 'Button',
   component: Button,
   parameters: {
@@ -17,22 +18,35 @@ export default {
     isDisabled: false,
     children: 'Button'
   }
+} satisfies Meta<typeof Button>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Primary: Story = {
+  args: {
+    variant: 'primary',
+    children: 'Primary Button'
+  }
 };
 
-export const Primary = {
+export const Secondary: Story = {
   args: {
-    variant: 'primary'
-  },
+    variant: 'secondary',
+    children: 'Secondary Button'
+  }
 };
 
-export const Secondary = {
+export const Destructive: Story = {
   args: {
-    variant: 'secondary'
-  },
+    variant: 'destructive',
+    children: 'Delete'
+  }
 };
 
-export const Destructive = {
+export const Disabled: Story = {
   args: {
-    variant: 'destructive'
-  },
+    isDisabled: true,
+    children: 'Disabled Button'
+  }
 };

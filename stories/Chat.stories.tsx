@@ -1,8 +1,8 @@
-import type { Meta } from '@storybook/react';
 import React from 'react';
+import { preview } from '../.storybook/preview';
 import { Chat } from '../src/wmcp/components/chat';
 
-const meta: Meta<typeof Chat> = {
+const meta = preview.meta({
   component: Chat,
   parameters: {
     layout: 'fullscreen',
@@ -14,33 +14,39 @@ const meta: Meta<typeof Chat> = {
   },
   tags: [],
   title: 'MCP/Chat'
-};
-
-export default meta;
+});
 
 // Main story example showcasing the Chat component with default server configs
-export const Example = () => {  
-  return <Chat />
-};
+export const Example = meta.story({
+  name: 'Default Chat',
+  args: {},
+  render: function Story(args) {
+    return <Chat {...args} />;
+  }
+});
 
 // Custom server configuration example
-export const CustomServerConfig = () => {  
-  return (
-    <div>
-      <Chat 
-        serverConfigs={{
-          'mcp-server-everything': {
-            command: 'npx',
-            args: ['-y', '@modelcontextprotocol/server-everything'],
-            env: {
-              DEBUG: 'true'
-            }
-          }
-        }}
-      />
-    </div>
-  );
-};
+export const CustomServerConfig = meta.story({
+  name: 'Custom Server Config',
+  args: {
+    serverConfigs: {
+      'mcp-server-everything': {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-everything'],
+        env: {
+          DEBUG: 'true'
+        }
+      }
+    }
+  },
+  render: function Story(args) {
+    return (
+      <div>
+        <Chat {...args} />
+      </div>
+    );
+  }
+});
 
 // Default export for Storybook
-export const Default = Example; 
+export default meta; 

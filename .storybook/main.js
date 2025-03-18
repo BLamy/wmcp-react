@@ -1,18 +1,5 @@
-const excludedProps = new Set([
-  'id',
-  'slot',
-  'onCopy',
-  'onCut',
-  'onPaste',
-  'onCompositionStart',
-  'onCompositionEnd',
-  'onCompositionUpdate',
-  'onSelect',
-  'onBeforeInput',
-  'onInput'
-]);
-
 /** @type { import('@storybook/react-vite').StorybookConfig } */
+
 const config = {
   stories: [
     "../stories/**/*.mdx",
@@ -45,7 +32,22 @@ const config = {
         allowSyntheticDefaultImports: false,
         esModuleInterop: false,
       },
-      propFilter: (prop) => !prop.name.startsWith('aria-') && !excludedProps.has(prop.name),
+      propFilter: (prop) => {
+        const excludedProps = new Set([
+          'id',
+          'slot',
+          'onCopy',
+          'onCut',
+          'onPaste',
+          'onCompositionStart',
+          'onCompositionEnd',
+          'onCompositionUpdate',
+          'onSelect',
+          'onBeforeInput',
+          'onInput'
+        ]);
+        return !prop.name.startsWith('aria-') && !excludedProps.has(prop.name);
+      },
     },
   },
   staticDirs: ['../public'],
@@ -81,9 +83,6 @@ const config = {
       }
     }
     
-    // Add custom Rollup plugin to inject headers into HTML files
-    config.plugins = config.plugins || [];
-
     // Ignore "use client" directive warnings
     config.build.rollupOptions.onwarn = (warning, defaultHandler) => {
       if (warning.code === 'MODULE_LEVEL_DIRECTIVE' && 
@@ -96,4 +95,5 @@ const config = {
     return config;
   },
 };
+
 export default config;

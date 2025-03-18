@@ -1,10 +1,17 @@
+/// <reference types="vitest" />
 import '../src/index.css';
 import React from 'react';
 // import { withThemeByClassName } from '@storybook/addon-themes';
 import WebContainerProvider from '../src/wmcp/providers/Webcontainer';
+import { definePreview } from '@storybook/react-vite';
 
 // Add SharedArrayBuffer check banner
 const withSharedArrayBufferCheck = (Story) => {
+  // Skip check in test environment
+  if (process.env.NODE_ENV === 'test') {
+    return <Story />;
+  }
+
   const [isSupported, setIsSupported] = React.useState(null);
   
   React.useEffect(() => {
@@ -60,6 +67,11 @@ const withSharedArrayBufferCheck = (Story) => {
 
 // Add WebContainer progress info
 const withWebContainerStatus = (Story) => {
+  // Skip status check in test environment
+  if (process.env.NODE_ENV === 'test') {
+    return <Story />;
+  }
+
   const [status, setStatus] = React.useState('initializing');
   const [message, setMessage] = React.useState('Preparing WebContainer environment...');
   
@@ -134,6 +146,11 @@ const withWebContainerStatus = (Story) => {
 
 // Provide a single WebContainer instance to all stories
 const withWebContainerProvider = (Story) => {
+  // Skip provider in test environment
+  if (process.env.NODE_ENV === 'test') {
+    return <Story />;
+  }
+
   return (
     <WebContainerProvider>
       <Story />
@@ -141,8 +158,7 @@ const withWebContainerProvider = (Story) => {
   );
 };
 
-/** @type { import('@storybook/react').Preview } */
-const preview = {
+export const preview = definePreview({
   parameters: {
     actions: { argTypesRegex: "^on[A-Z].*" },
     controls: {
@@ -152,19 +168,10 @@ const preview = {
       },
     }
   },
-
   decorators: [
     withSharedArrayBufferCheck,
-    // withWebContainerStatus,
     withWebContainerProvider,
-    // withThemeByClassName({
-    //   themes: {
-    //     light: '',
-    //     dark: 'dark',
-    //   },
-    //   defaultTheme: 'light',
-    // }),
   ],
-};
+});
 
 export default preview; 

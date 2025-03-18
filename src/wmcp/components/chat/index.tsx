@@ -584,9 +584,10 @@ interface ApiKeyAlertDialogProps {
   onChange: (apiKey: string) => void;
   isOpen: boolean;
   activeServers: Record<string, ServerConfig>;
+  onConfigureServers: () => void;
 }
 
-function ApiKeyAlertDialog({ apiKey, onChange, isOpen, activeServers }: ApiKeyAlertDialogProps) {
+function ApiKeyAlertDialog({ apiKey, onChange, isOpen, activeServers, onConfigureServers }: ApiKeyAlertDialogProps) {
   const [inputValue, setInputValue] = useState(apiKey);
 
   // Reset input when dialog opens
@@ -912,7 +913,7 @@ function ChatInterface({
 
   // Scroll to bottom when messages update
   useEffect(() => {
-    if (messagesEndRef.current) {
+    if (messagesEndRef.current && typeof messagesEndRef.current.scrollIntoView === 'function') {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
