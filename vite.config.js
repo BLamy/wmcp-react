@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite'
+import webcontainerFilesPlugin from './.vite/plugins/webcontainer-files.tsx'
 
 export default defineConfig({
   // Suppress warnings about "use client" directives
@@ -14,7 +15,12 @@ export default defineConfig({
     },
     // Increase chunk size limit to avoid too many warnings
     chunkSizeWarningLimit: 800,
+
   },
+  optimizeDeps: {
+    exclude: ['@electric-sql/pglite'],
+  },
+  plugins: [webcontainerFilesPlugin()],
   // Configure server headers for SharedArrayBuffer support
   server: {
     headers: {

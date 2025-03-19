@@ -3,6 +3,7 @@
 import { WebContainer } from "@webcontainer/api";
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { FileSystemTree } from "@webcontainer/api";
+import { files } from "virtual:webcontainer-files";
 
 type WebContainerState = "booting" | "ready" | "none";
 
@@ -41,16 +42,22 @@ export default function WebContainerProvider({
     const writeFilesystemDirectly = async (container: WebContainer, filesystem: FileSystemTree) => {
       try {
         console.log(`Writing filesystem directly:`, filesystem);
+        console.log(`Filesystem object keys:`, Object.keys(filesystem));
         
         // Process each entry in the filesystem
         for (const path in filesystem) {
           const entry = filesystem[path];
+          console.log(`Processing entry: ${path}, type:`, 'directory' in entry ? 'directory' : 'file');
           
           if ('directory' in entry) {
             // Create directory
             try {
               await container.fs.mkdir(path, { recursive: true });
               console.log(`Created directory: ${path}`);
+              
+              // List contents after creating directory
+              const dirContents = await container.fs.readdir(path);
+              console.log(`Contents of ${path} after creation:`, dirContents);
             } catch (err) {
               console.error(`Error creating directory ${path}:`, err);
             }
@@ -88,17 +95,29 @@ export default function WebContainerProvider({
       try {
         console.log(`Mounting filesystem: ${id}`, filesystem);
         
+        // Convert the filesystem structure to the expected format
+        const processedFS: FileSystemTree = {};
+        
+        // Process each entry to ensure proper paths
+        for (const key in filesystem) {
+          const entry = filesystem[key];
+          const path = key.startsWith('/') ? key : `/${key}`;
+          processedFS[path] = entry;
+        }
+        
+        console.log(`Processed filesystem:`, processedFS);
+        
         // First try using the mount API
         try {
           // Use proper type casting for the WebContainer API
-          await container.mount(filesystem as any);
+          await container.mount(processedFS as any);
           console.log(`Successfully mounted filesystem: ${id} via mount API`);
           return true;
         } catch (mountError) {
           console.warn(`Mount API failed for ${id}, falling back to direct file writing:`, mountError);
           
           // If mount fails, fallback to direct file writing
-          const success = await writeFilesystemDirectly(container, filesystem);
+          const success = await writeFilesystemDirectly(container, processedFS);
           if (success) {
             console.log(`Successfully wrote filesystem: ${id} via direct file writing`);
             return true;
@@ -161,7 +180,7 @@ export default function WebContainerProvider({
             console.log("Booting WebContainer...");
             
             WebContainer.boot()
-                .then((webContainer) => {
+                .then(async (webContainer) => {
                     console.log("WebContainer booted successfully");
                     setWebContainer(webContainer);
                     webContainerStatus.current = "ready";
@@ -171,9 +190,130 @@ export default function WebContainerProvider({
                         setPortForwards((prev) => ({...prev, [port]: url}));
                     });
                     
-                    // Apply all registered filesystems once the container is ready
-                    console.log("Applying registered filesystems...");
+                    // Write files directly to WebContainer
+                    console.log("Writing files directly to WebContainer...");
+                    
+                    if (files && Object.keys(files).length > 0) {
+                        try {
+                            // Process each file manually
+                            for (const filename of Object.keys(files)) {
+                                const entry = files[filename];
+                                const path = `/${filename}`;
+                                
+                                console.log(`Processing direct write for: ${path}`);
+                                
+                                if ('directory' in entry) {
+                                    // Create directory
+                                    try {
+                                        await webContainer.fs.mkdir(path, { recursive: true });
+                                        console.log(`Created directory: ${path}`);
+                                    } catch (err) {
+                                        console.error(`Error creating directory ${path}:`, err);
+                                    }
+                                    
+                                    // Recursively process directory contents using helper function
+                                    await writeDirectoryContents(webContainer, path, entry.directory);
+                                } else if ('file' in entry) {
+                                    // Write file
+                                    try {
+                                        await webContainer.fs.writeFile(path, entry.file.contents);
+                                        console.log(`Created file: ${path}`);
+                                    } catch (err) {
+                                        console.error(`Error writing file ${path}:`, err);
+                                    }
+                                }
+                            }
+                            console.log("Direct file writing complete");
+                            
+                            // Run npm install after files are written
+                            console.log("Running npm install...");
+                            try {
+                                const installProcess = await webContainer.spawn('npm', ['install']);
+                                installProcess.output.pipeTo(new WritableStream({
+                                    write(data) {
+                                        console.log(`[npm install] ${data}`);
+                                    }
+                                }));
+                                const installExitCode = await installProcess.exit;
+                                console.log(`npm install completed with exit code ${installExitCode}`);
+                            } catch (error) {
+                                console.error("Error running npm install:", error);
+                            }
+                        } catch (error) {
+                            console.error("Error writing files directly:", error);
+                        }
+                        
+                        // Helper function to recursively write directory contents
+                        async function writeDirectoryContents(container, basePath, dirContents) {
+                            for (const name in dirContents) {
+                                const entry = dirContents[name];
+                                const fullPath = `${basePath}/${name}`;
+                                
+                                if ('directory' in entry) {
+                                    try {
+                                        await container.fs.mkdir(fullPath, { recursive: true });
+                                        console.log(`Created nested directory: ${fullPath}`);
+                                        
+                                        // Recursively handle subdirectories
+                                        await writeDirectoryContents(container, fullPath, entry.directory);
+                                    } catch (err) {
+                                        console.error(`Error creating nested directory ${fullPath}:`, err);
+                                    }
+                                } else if ('file' in entry) {
+                                    try {
+                                        await container.fs.writeFile(fullPath, entry.file.contents);
+                                        console.log(`Created nested file: ${fullPath}`);
+                                    } catch (err) {
+                                        console.error(`Error writing nested file ${fullPath}:`, err);
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        console.warn("No files to write to WebContainer");
+                    }
+                    
+                    // Apply registered filesystems
+                    console.log("Applying other registered filesystems...");
                     applyFilesystems();
+                    
+                    // List files in the WebContainer to verify they were mounted
+                    setTimeout(async () => {
+                        try {
+                            console.log("Listing files in WebContainer root:");
+                            const rootFiles = await webContainer.fs.readdir("/");
+                            console.log("Root files:", rootFiles);
+                            
+                            // Check specific files we expect to be there
+                            try {
+                                const hasPackageJson = await webContainer.fs.readFile("/package.json", "utf-8");
+                                console.log("Found package.json:", hasPackageJson.substring(0, 100) + "...");
+                            } catch (err) {
+                                console.error("Error reading package.json:", err);
+                            }
+                            
+                            try {
+                                const hasTsConfig = await webContainer.fs.readFile("/tsconfig.json", "utf-8");
+                                console.log("Found tsconfig.json:", hasTsConfig.substring(0, 100) + "...");
+                            } catch (err) {
+                                console.error("Error reading tsconfig.json:", err);
+                            }
+                            
+                            // Check each subdirectory
+                            for (const file of rootFiles) {
+                                try {
+                                    // Try to read the directory - if it succeeds, it's a directory
+                                    const subFiles = await webContainer.fs.readdir(`/${file}`);
+                                    console.log(`Files in /${file}:`, subFiles);
+                                } catch (err) {
+                                    // Not a directory or other error
+                                    console.log(`${file} is not a directory or cannot be read`);
+                                }
+                            }
+                        } catch (err) {
+                            console.error("Error listing WebContainer files:", err);
+                        }
+                    }, 1000);
                 })
                 .catch((error) => {
                     console.error("Error booting WebContainer:", error);

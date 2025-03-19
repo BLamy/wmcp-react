@@ -43,7 +43,7 @@ export type ServerConfig = {
       }
   
       try {
-        console.log('Initializing MCP Client Manager...');
+        // console.log('Initializing MCP Client Manager...');
         
         // Store server configurations
         for (const [serverName, config] of Object.entries(serverConfigs)) {
@@ -57,7 +57,7 @@ export type ServerConfig = {
               await this.connectToServer(serverName, config);
               return true;
             } catch (error) {
-              console.error(`Failed to connect to server ${serverName}:`, error);
+              // console.error(`Failed to connect to server ${serverName}:`, error);
               return false;
             }
           }
@@ -72,12 +72,12 @@ export type ServerConfig = {
         }
         
         // Map tools and resources
-        await this.mapToolsAndResources();
+        await this.mapToolsAndResources(); 
         
         this.isInitialized = true;
-        console.log('MCP Client Manager initialized successfully');
+        // console.log('MCP Client Manager initialized successfully');
       } catch (error) {
-        console.error(`Failed to initialize MCP Client Manager:`, error);
+        // console.error(`Failed to initialize MCP Client Manager:`, error);
         throw error;
       }
     }
@@ -85,7 +85,7 @@ export type ServerConfig = {
     // Connect to a specific MCP server
     async connectToServer(serverName: string, config: ServerConfig): Promise<void> {
       try {
-        console.log(`Connecting to MCP server: ${serverName}`);
+        // console.log(`Connecting to MCP server: ${serverName}`);
         
         if (!this.webContainer) {
           throw new Error('WebContainer is not available');
@@ -177,7 +177,7 @@ export type ServerConfig = {
           
           this.clients.set(serverName, client);
         } catch (error) {
-          console.error(`Failed to connect client for ${serverName}:`, error);
+          // console.error(`Failed to connect client for ${serverName}:`, error);
           
           // Clean up the transport
           if (transport) {
@@ -352,13 +352,13 @@ export type ServerConfig = {
   
     // Disconnect from all servers
     async disconnectAll(): Promise<void> {
-      console.log('Disconnecting from all servers...');
+      // console.log('Disconnecting from all servers...');
       
       // Close all transports
       for (const [serverName, transport] of this.transports.entries()) {
         try {
           await transport.close();
-          console.log(`Closed transport for server ${serverName}`);
+          // console.log(`Closed tran`sport for server ${serverName}`);
         } catch (error) {
           console.warn(`Error closing transport for server ${serverName}:`, error);
         }
@@ -369,7 +369,7 @@ export type ServerConfig = {
         try {
           if (process.kill) {
             process.kill();
-            console.log(`Killed process for server ${serverName}`);
+            // console.log(`Killed process for server ${serverName}`);
           }
         } catch (error) {
           console.warn(`Error killing process for server ${serverName}:`, error);
@@ -421,7 +421,7 @@ async function startServerProcess(
         })
       };
     } catch (error) {
-      console.error(`Failed to start server process for ${serverName}:`, error);
+      // console.error(`Failed to start server process for ${serverName}:`, error);
       throw error;
     }
   }

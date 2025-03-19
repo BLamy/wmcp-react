@@ -777,7 +777,7 @@ export const SharedFileSystem: Story = {
             <p>Changes made in one component are visible to all other components.</p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <FileContributor 
               name="Frontend Component" 
               color="blue" 
@@ -947,7 +947,9 @@ This allows components to access files created by other components.`
                 }
               }}
             />
-            
+          </div>
+          
+          <div className="w-full">
             <FileBrowser />
           </div>
         </div>

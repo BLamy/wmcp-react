@@ -67,7 +67,7 @@ export function useMCPServer(props: { mcpServers: Record<string, ServerConfig> }
           setResources(resourcesList);
           setStatus('READY');
         } catch (err) {
-          console.error('Failed to initialize MCP Client Manager:', err);
+          // console.error('Failed to initialize MCP Client Manager:', err);
           setError(err as Error);
           setStatus('ERROR');
         }

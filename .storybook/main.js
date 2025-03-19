@@ -5,7 +5,11 @@ const config = {
     "../stories/**/*.mdx",
     "../stories/**/Chat.stories.@(js|jsx|mjs|ts|tsx)",
     "../stories/**/ModelContextProtocol.stories.@(js|jsx|mjs|ts|tsx)",
-    "../stories/**/Webcontainer.stories.@(js|jsx|mjs|ts|tsx)"
+    "../stories/**/Webcontainer.stories.@(js|jsx|mjs|ts|tsx)",
+    "../stories/**/VectorSearch.stories.@(js|jsx|mjs|ts|tsx)",
+    "../stories/**/MCPToolRouter.stories.@(js|jsx|mjs|ts|tsx)",
+    "../stories/**/MCPToolRouterChat.stories.@(js|jsx|mjs|ts|tsx)",
+    "../stories/**/SemanticToolChat.stories.@(js|jsx|mjs|ts|tsx)"
   ],
   addons: [
     "@storybook/addon-links",
