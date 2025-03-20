@@ -1,6 +1,6 @@
 import type { Meta } from '@storybook/react';
 import React from 'react';
-import { Tag, TagGroup } from '../src/TagGroup';
+import { Tag, TagGroup } from '../src/components/aria/TagGroup';
 
 const meta: Meta<typeof Example> = {
   component: TagGroup,

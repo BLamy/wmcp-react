@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Form } from '../../../Form';
-import { TextField } from '../../../TextField';
-import { NumberField } from '../../../NumberField';
-import { DateField } from '../../../DateField';
-import { Checkbox } from '../../../Checkbox';
-import { Button } from '../../../Button';
+import { Form } from '@/components/aria/Form';
+import { TextField } from '@/components/aria/TextField';
+import { NumberField } from '@/components/aria/NumberField';
+import { DateField } from '@/components/aria/DateField';
+import { Checkbox } from '@/components/aria/Checkbox';
+import { Button } from '@/components/aria/Button';
 
 export interface Schema {
   properties?: Record<string, any>;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tree, TreeItem, TreeItemContent } from '../../../Tree';
+import { Tree, TreeItem, TreeItemContent } from '../../../components/aria/Tree';
 import { FileSystemTree as WebContainerFileSystemTree} from '@webcontainer/api';
 
 

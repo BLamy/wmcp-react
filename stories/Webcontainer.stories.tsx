@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useContext } from 'react';
 import { Meta, StoryObj } from '@storybook/react';
 import { WebContainerContext } from '../src/wmcp/providers/Webcontainer';
 import { useWebContainer } from '../src/wmcp/hooks/useWebcontainer';
-import { Tree, TreeItem, TreeItemContent } from '../src/Tree';
+import { Tree, TreeItem, TreeItemContent } from '../src/components/aria/Tree';
 import Editor from '@monaco-editor/react';
 import { FileSystemTree as WebContainerFileSystemTree } from '@webcontainer/api';
 import {

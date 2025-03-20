@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite'
+import path from 'path'
 import webcontainerFilesPlugin from './.vite/plugins/webcontainer-files.tsx'
 
 export default defineConfig({
@@ -26,6 +27,11 @@ export default defineConfig({
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp',
+    }
+  },
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src')
     }
   }
 }) 

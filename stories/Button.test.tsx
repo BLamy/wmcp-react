@@ -3,7 +3,7 @@ import React from 'react';
 import { render, screen, cleanup } from '@testing-library/react';
 import { describe, test, expect, vi, afterEach } from 'vitest';
 import userEvent from '@testing-library/user-event';
-import { Button } from '../src/Button';
+import { Button } from '@/components/aria/Button';
 
 afterEach(() => {
   cleanup();

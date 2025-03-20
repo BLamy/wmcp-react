@@ -56,7 +56,7 @@ const search = async (
     ORDER BY 
       similarity DESC 
     LIMIT $3`,
-    embedding, match_threshold, limit
+    [embedding, match_threshold, limit]
   );
   return result.rows;
 };
@@ -96,7 +96,7 @@ const seedDb = async (db: PGlite) => {
     await db.exec(`
       insert into tool_embeddings (tool_name, description, embedding) values
       ($1, $2, $3)
-    `, tool.name, tool.description, placeholderEmbedding);
+    `, [tool.name, tool.description, placeholderEmbedding]);
   }
 };
 

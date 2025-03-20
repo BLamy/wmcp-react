@@ -3,7 +3,7 @@ import { PrinterIcon, SaveIcon } from 'lucide-react';
 import React from 'react';
 import { TooltipTrigger } from 'react-aria-components';
 import { Button } from '../src/Button';
-import { Tooltip } from '../src/Tooltip';
+import { Tooltip } from '../src/components/aria/Tooltip';
 
 const meta: Meta<typeof Tooltip> = {
   component: Tooltip,

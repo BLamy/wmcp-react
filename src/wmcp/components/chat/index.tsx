@@ -1,30 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 import { Form, DialogTrigger, Checkbox } from 'react-aria-components';
-import { Button } from '../../../Button';
-import { TextField } from '../../../TextField';
+import { Button } from '@/components/aria/Button';
+import { TextField } from '../../../components/aria/TextField';
 import { MenuTrigger, Modal, ModalOverlay, Dialog, Heading } from 'react-aria-components';
 import { WrenchIcon, Wand2, Send, Settings, MoreHorizontal, Plus, AlertCircle, Server, Save, Check, Info, X, Key } from 'lucide-react';
-import { Menu, MenuItem, MenuSection } from '../../../Menu';
+import { Menu, MenuItem, MenuSection } from '@/components/aria/Menu';
 import { animate, AnimatePresence, motion, useMotionTemplate, useMotionValue, useMotionValueEvent, useTransform } from 'framer-motion';
-import { AlertDialog } from '../../../AlertDialog';
-import { Switch } from '../../../Switch';
+import { AlertDialog } from '@/components/aria/AlertDialog';
+import { Switch } from '@/components/aria/Switch';
 import { 
   Disclosure, 
   DisclosureGroup, 
   DisclosureHeader, 
   DisclosurePanel 
-} from '../../../Disclosure';
-import {
-  ActionCard,
-  ErrorDisplay,
-  LoadingIndicator
-} from '../../components';
+} from '@/components/aria/Disclosure';
+import { ActionCard } from '@/wmcp/components/layout/ActionCard';
+
+
 import { Tool } from '@modelcontextprotocol/sdk/types';
 import { ServerConfig } from '../../lib/McpClientManager';
 import { MCPServerStatus, useMCPServer } from '../../hooks/useMcpServer';
 import { startRegistration, startAuthentication, WebAuthnError } from '../../lib/webauthn';
 import { deriveKey, encryptData, decryptData } from '../../lib/utils';
+import { LoadingIndicator } from '../status/LoadingIndicator';
+import { ErrorDisplay } from '../status/ErrorDisplay';
 
 // Extend the ToolDefinition type to include serverName
 interface ToolDefinition extends Tool {

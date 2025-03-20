@@ -161,7 +161,7 @@ async function main() {
 
       case 'status':
         const status = await git.statusMatrix({ fs, dir });
-        const fileStatuses = status.map(([filepath, head, workdir, stage]) => {
+        const fileStatuses = status.map(([filepath, head, workdir, stage]: [string, number, number, number]) => {
           let status = '';
           if (head === 0 && workdir === 2) status = 'added';
           if (head === 1 && workdir === 2) status = 'modified';
@@ -174,7 +174,7 @@ async function main() {
 
       case 'log':
         const commits = await git.log({ fs, dir });
-        commits.forEach(commit => {
+        commits.forEach((commit: { oid: string; commit: { message: string } }) => {
           console.log(`commit ${commit.oid}\n${commit.commit.message}\n`);
         });
         break;

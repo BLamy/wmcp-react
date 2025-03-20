@@ -3,7 +3,7 @@ import React from 'react';
 import { Button } from '../src/Button';
 import { DateField } from '../src/DateField';
 import { Form } from '../src/Form';
-import { TextField } from '../src/TextField';
+import { TextField } from '../src/components/aria/TextField';
 
 const meta: Meta<typeof Form> = {
   component: Form,

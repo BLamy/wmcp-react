@@ -7,7 +7,7 @@ import {
 } from 'react-aria-components';
 import { Button } from './Button';
 import { Description, FieldError, FieldGroup, Input, Label } from './Field';
-import { composeTailwindRenderProps } from './utils';
+import { composeTailwindRenderProps } from '@/components/aria/utils';
 
 export interface SearchFieldProps extends AriaSearchFieldProps {
   label?: string;

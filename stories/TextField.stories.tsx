@@ -2,7 +2,7 @@ import type { Meta } from '@storybook/react';
 import React from 'react';
 import { Form } from 'react-aria-components';
 import { Button } from '../src/Button';
-import { TextField } from '../src/TextField';
+import { TextField } from '../src/components/aria/TextField';
 
 const meta: Meta<typeof TextField> = {
   component: TextField,

@@ -1,5 +1,5 @@
 import type { Meta } from '@storybook/react';
-import { Tree, TreeItem, TreeItemContent } from '../src/Tree';
+import { Tree, TreeItem, TreeItemContent } from '../src/components/aria/Tree';
 import React from 'react';
 
 const meta: Meta<typeof Tree> = {

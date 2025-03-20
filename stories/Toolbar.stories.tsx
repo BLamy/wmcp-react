@@ -3,9 +3,9 @@ import React from 'react';
 import { Group } from 'react-aria-components';
 import { Button } from '../src/Button';
 import { Checkbox } from '../src/Checkbox';
-import { Separator } from '../src/Separator';
-import { ToggleButton } from '../src/ToggleButton';
-import { Toolbar } from '../src/Toolbar';
+import { Separator } from '../src/components/aria/Separator';
+import { ToggleButton } from '../src/components/aria/ToggleButton';
+import { Toolbar } from '../src/components/aria/Toolbar';
 
 import type { Meta } from '@storybook/react';
 

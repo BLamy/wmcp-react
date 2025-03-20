@@ -1,7 +1,7 @@
 // example.tsx - Complete example demonstrating the system
 import React, { useState, useEffect } from 'react';
 import { DatabaseProvider, useTable, useDatabase } from './db-context';
-import { Table, TableHeader, Column, Row, Cell } from '../Table';
+import { Table, TableHeader, Column, Row, Cell } from '../components/aria/Table';
 import { TableBody } from 'react-aria-components';
 import LexicalEditor from './LexicalEditor';
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button } from '../../../Button';
+import { Button } from '@/components/aria/Button';
 import { useFileOperations } from './useFileOperations';
 import { WebContainer } from '@webcontainer/api';
 

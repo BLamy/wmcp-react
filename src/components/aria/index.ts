@@ -5,7 +5,6 @@ export { Breadcrumbs } from './Breadcrumbs';
 export { Button } from './Button';
 export { Calendar } from './Calendar';
 export { Checkbox, CheckboxGroup } from './Checkbox';
-export { Chat } from './Chat';
 export { ColorArea } from './ColorArea';
 export { ColorField } from './ColorField';
 export { ColorPicker } from './ColorPicker';
@@ -44,14 +43,4 @@ export { Toolbar } from './Toolbar';
 export { Tooltip } from './Tooltip';
 export { Tree } from './Tree';
 
-// MCP exports
-export {
-  WebcontainerProvider,
-  useWebcontainer
-} from './wmcp/providers/Webcontainer';
 
-export {
-  MCPServerProvider,
-  useMCPServer,
-  useModelContextProtocol
-} from './wmcp/providers/ModelContextProtocol'; 

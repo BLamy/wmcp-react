@@ -6,12 +6,12 @@ import {
   MCPServerStatus,
   ReadResourceResponse
 } from '../src/wmcp';
-import { Form } from '../src/Form';
-import { TextField } from '../src/TextField';
-import { NumberField } from '../src/NumberField';
-import { DateField } from '../src/DateField';
-import { Checkbox, CheckboxGroup } from '../src/Checkbox';
-import { Button } from '../src/Button';
+import { Form } from '@/components/aria/Form';
+import { TextField } from '@/components/aria/TextField';
+import { NumberField } from '@/components/aria/NumberField';
+import { DateField } from '@/components/aria/DateField';
+import { Checkbox, CheckboxGroup } from '@/components/aria/Checkbox';
+import { Button } from '@/components/aria/Button';
 import { ActionCard, ErrorDisplay, LoadingIndicator } from '../src/wmcp/components';
 import { Tool, Resource } from '@modelcontextprotocol/sdk/types';
 
@@ -694,7 +694,7 @@ function ResourcesExampleContent({ serverConfigs = {
     
     try {
       const result = await fetchResource(selectedResource.uri);
-      setResourceContent(result);
+      setResourceContent(result as any);
     } catch (err) {
       console.error('Error fetching resource:', err);
     } finally {
