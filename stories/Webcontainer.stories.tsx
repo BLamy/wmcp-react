@@ -1379,8 +1379,7 @@ export const IntegratedWebContainer: Story = {
                       webContainer={webContainer}
                       height="100%"
                       initialCommands={[
-                        'echo "Welcome to WebContainer Terminal"',
-                        'ls -la'
+                        'echo "Welcome to WebContainer Terminal"'
                       ]}
                       onInitialized={handleTerminalInitialized}
                       onError={handleTerminalError}
