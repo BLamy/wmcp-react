@@ -26,7 +26,7 @@ import { composeTailwindRenderProps, focusRing } from './utils';
 
 export function Table(props: TableProps) {
   return (
-    <ResizableTableContainer className="max-h-[280px] w-[550px] overflow-auto scroll-pt-[2.281rem] relative border border-gray-200 dark:border-zinc-600 rounded-lg">
+    <ResizableTableContainer className="w-full overflow-auto scroll-pt-[2.281rem] relative border border-gray-200 dark:border-zinc-600 rounded-lg">
       <AriaTable {...props} className="border-separate border-spacing-0" />
     </ResizableTableContainer>
   );

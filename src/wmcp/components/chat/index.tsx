@@ -23,6 +23,8 @@ import {
 import { Tool } from '@modelcontextprotocol/sdk/types';
 import { ServerConfig } from '../../lib/McpClientManager';
 import { MCPServerStatus, useMCPServer } from '../../hooks/useMcpServer';
+import { startRegistration, startAuthentication, WebAuthnError } from '../../lib/webauthn';
+import { deriveKey, encryptData, decryptData } from '../../lib/utils';
 
 // Extend the ToolDefinition type to include serverName
 interface ToolDefinition extends Tool {
@@ -589,16 +591,155 @@ interface ApiKeyAlertDialogProps {
 
 function ApiKeyAlertDialog({ apiKey, onChange, isOpen, activeServers, onConfigureServers }: ApiKeyAlertDialogProps) {
   const [inputValue, setInputValue] = useState(apiKey);
+  const [authStatus, setAuthStatus] = useState<'initial' | 'registered' | 'authenticated'>('initial');
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Check if we have a stored encrypted key
+  useEffect(() => {
+    const hasEncryptedKey = localStorage.getItem('encryptedApiKey') !== null;
+    if (hasEncryptedKey) {
+      setAuthStatus('registered');
+      // Will trigger authentication later after the component is fully mounted
+      setTimeout(() => {
+        handleAuthenticate();
+      }, 100);
+    }
+  }, []);  // Note: we intentionally don't include handleAuthenticate in deps to avoid infinite loops
 
   // Reset input when dialog opens
   useEffect(() => {
     if (isOpen) {
       setInputValue(apiKey);
+      setError(null);
+      setIsLoading(false);
     }
   }, [isOpen, apiKey]);
 
-  const handleSave = () => {
-    onChange(inputValue);
+  // Register new WebAuthn credential
+  const handleRegister = async () => {
+    try {
+      setError(null);
+      setIsLoading(true);
+      
+      // Start WebAuthn registration with default username
+      const credential = await startRegistration();
+      console.log('Registration successful:', credential);
+      
+      // Encrypt and save API key if provided
+      if (inputValue) {
+        await encryptAndSaveKey(inputValue);
+      }
+      
+      setAuthStatus('registered');
+      setIsLoading(false);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof WebAuthnError 
+        ? err.message 
+        : 'Registration failed: ' + (err instanceof Error ? err.message : String(err));
+      
+      setError(errorMessage);
+      console.error(err);
+      setIsLoading(false);
+    }
+  };
+
+  // Authenticate with existing credential
+  const handleAuthenticate = async () => {
+    try {
+      setError(null);
+      setIsLoading(true);
+      
+      // Start WebAuthn authentication
+      const assertion = await startAuthentication();
+      console.log('Authentication successful:', assertion);
+      
+      // If we have an encrypted key, decrypt it
+      const encryptedKey = localStorage.getItem('encryptedApiKey');
+      if (encryptedKey) {
+        try {
+          // Derive encryption key from authentication data
+          // Force as ArrayBuffer to fix TypeScript error
+          const encodedId = new TextEncoder().encode(assertion.id);
+          const buffer = encodedId.buffer as ArrayBuffer;
+          const key = await deriveKey(buffer);
+          
+          // Decrypt the API key
+          const decryptedKey = await decryptData(key, encryptedKey);
+          setInputValue(decryptedKey);
+        } catch (decryptErr) {
+          console.error('Decryption error:', decryptErr);
+          setError('Failed to decrypt API key');
+        }
+      }
+      
+      setAuthStatus('authenticated');
+      setIsLoading(false);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof WebAuthnError 
+        ? err.message 
+        : 'Authentication failed: ' + (err instanceof Error ? err.message : String(err));
+      
+      setError(errorMessage);
+      console.error(err);
+      setIsLoading(false);
+    }
+  };
+
+  // Encrypt and save API key
+  const encryptAndSaveKey = async (keyToEncrypt: string) => {
+    try {
+      setIsLoading(true);
+      // Re-authenticate to get fresh authentication data
+      const assertion = await startAuthentication();
+      
+      // Derive encryption key from authentication data
+      // Force as ArrayBuffer to fix TypeScript error
+      const encodedId = new TextEncoder().encode(assertion.id);
+      const buffer = encodedId.buffer as ArrayBuffer;
+      const key = await deriveKey(buffer);
+      
+      // Encrypt the API key
+      const encrypted = await encryptData(key, keyToEncrypt);
+      
+      // Save to localStorage
+      localStorage.setItem('encryptedApiKey', encrypted);
+      setIsLoading(false);
+      
+      return true;
+    } catch (err: unknown) {
+      console.error('Error saving encrypted key:', err);
+      const errorMessage = 'Failed to securely save API key: ' + 
+        (err instanceof Error ? err.message : String(err));
+      
+      setError(errorMessage);
+      setIsLoading(false);
+      return false;
+    }
+  };
+
+  // Handle saving the API key
+  const handleSave = async () => {
+    // If we have a valid API key and we're authenticated, encrypt and save it
+    if (inputValue && authStatus === 'authenticated') {
+      const success = await encryptAndSaveKey(inputValue);
+      if (success) {
+        onChange(inputValue);
+      }
+    } else if (inputValue) {
+      // If not authenticated yet but have a key, just pass it through
+      onChange(inputValue);
+    } else if (Object.keys(activeServers).length > 0) {
+      // No API key but we have servers, so that's ok
+      onChange('');
+    }
+  };
+
+  // Clear stored credentials and encrypted key
+  const handleClearCredentials = () => {
+    localStorage.removeItem('encryptedApiKey');
+    setAuthStatus('initial');
+    setInputValue('');
   };
 
   if (!isOpen) return null;
@@ -611,20 +752,45 @@ function ApiKeyAlertDialog({ apiKey, onChange, isOpen, activeServers, onConfigur
         className="max-w-md w-full"
         actions={
           <div className="flex justify-end gap-2">
-            <Button
-              variant="primary"
-              onPress={handleSave}
-              isDisabled={!inputValue && Object.keys(activeServers).length === 0}
-              autoFocus
-            >
-              Continue
-            </Button>
+            {authStatus === 'initial' && (
+              <Button
+                variant="primary"
+                onPress={handleRegister}
+                isDisabled={isLoading}
+              >
+                {isLoading ? 'Setting up...' : 'Secure with Passkey'}
+              </Button>
+            )}
+            
+            {authStatus === 'registered' && (
+              <Button
+                variant="secondary"
+                onPress={handleAuthenticate}
+                isDisabled={isLoading}
+              >
+                {isLoading ? 'Unlocking...' : 'Unlock with Passkey'}
+              </Button>
+            )}
+            
+            {(authStatus === 'authenticated' || authStatus === 'initial') && (
+              <Button
+                variant="primary"
+                onPress={handleSave}
+                isDisabled={(!inputValue && Object.keys(activeServers).length === 0) || isLoading}
+                autoFocus
+              >
+                Continue
+              </Button>
+            )}
           </div>
         }
       >
         <p className="text-gray-600 dark:text-gray-400 mb-4">
-          Please provide your Anthropic API key to use Claude directly.
-          This key will not be stored anywhere.
+          {authStatus === 'registered' ? 
+            'Please authenticate with your passkey to unlock your API key.' :
+            authStatus === 'initial' ? 
+              'Please provide your Anthropic API key to use Claude directly. Secure your key with a passkey for encrypted local storage.' :
+              'API key unlocked successfully. Click continue to proceed.'}
         </p>
         
         <div className="mb-6">
@@ -634,16 +800,48 @@ function ApiKeyAlertDialog({ apiKey, onChange, isOpen, activeServers, onConfigur
             value={inputValue}
             onChange={setInputValue}
             aria-label="Anthropic API Key"
+            isDisabled={authStatus === 'registered'}
           />
         </div>
         
-        {!inputValue && (
-          <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
-            {Object.keys(activeServers).length === 0 
-              ? "To continue without an API key, you must configure MCP servers."
-              : "You'll continue using MCP servers for processing."
-            }
+        {authStatus === 'registered' && (
+          <div className="flex justify-between items-center mb-4">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Authentication required to access your saved API key.
+            </p>
+            <Button 
+              variant="secondary" 
+              className="text-xs"
+              onPress={handleClearCredentials}
+              isDisabled={isLoading}
+            >
+              Clear Credentials
+            </Button>
+          </div>
+        )}
+        
+        {authStatus === 'authenticated' && (
+          <p className="text-sm text-green-500 dark:text-green-400 mb-4">
+            Passkey authenticated. Your API key is ready to use.
           </p>
+        )}
+        
+        {isLoading && (
+          <div className="my-2">
+            <LoadingIndicator message="Processing your request..." variant="spinner" />
+          </div>
+        )}
+        
+        {!inputValue && authStatus !== 'registered' && (
+          <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
+            An API key is required for this application.
+          </p>
+        )}
+        
+        {error && (
+          <div className="mt-2 p-2 bg-red-100 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded text-red-800 dark:text-red-200 text-sm">
+            {error}
+          </div>
         )}
       </ActionCard>
     </div>
@@ -745,6 +943,16 @@ function ChatInterface({
   const [showApiKeyDialog, setShowApiKeyDialog] = useState<boolean>(true);
   const [showServerConfigSheet, setShowServerConfigSheet] = useState<boolean>(false);
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
+  
+  // Check for encrypted API key in localStorage on init
+  useEffect(() => {
+    const hasEncryptedKey = localStorage.getItem('encryptedApiKey') !== null;
+    
+    if (hasEncryptedKey) {
+      // Always show the dialog if we have an encrypted key but no active key
+      setShowApiKeyDialog(true);
+    }
+  }, []);
   
   // State for chat
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -938,9 +1146,10 @@ function ChatInterface({
     
     if (!inputValue.trim() || isProcessing) return;
     
-    // Check if either API key is set or MCP server is ready
-    if (!apiKey && status !== 'READY') {
-      setError("Please set your API key or wait for the MCP server to be ready.");
+    // We now require an API key for all operations
+    if (!apiKey) {
+      setError("API key is required. Please set your API key.");
+      setShowApiKeyDialog(true);
       return;
     }
     
@@ -1188,20 +1397,22 @@ function ChatInterface({
   // Handle API key save
   const handleApiKeySave = (newApiKey: string) => {
     setApiKey(newApiKey);
-    // If key is provided or we have active servers, we can close the dialog
-    if (newApiKey || Object.keys(activeServers).length > 0) {
+    
+    // Close the dialog if we have a key
+    if (newApiKey) {
       setShowApiKeyDialog(false);
+      
+      const encryptedKeyExists = localStorage.getItem('encryptedApiKey') !== null;
       setNotification({
-        message: newApiKey 
-          ? 'API key set successfully. Using Anthropic API directly.' 
-          : 'Using MCP servers for AI processing.',
+        message: encryptedKeyExists 
+          ? 'Unlocked API key successfully.' 
+          : 'API key secured with passkey.',
         type: 'success'
       });
     } else {
-      // If no key and no servers, keep dialog open and show notification
-      setShowServerConfigSheet(true);
+      // If no key, show an error
       setNotification({
-        message: 'Please provide an API key or configure MCP servers.',
+        message: 'API key is required to use this application.',
         type: 'error'
       });
     }
@@ -1310,7 +1521,7 @@ function ChatInterface({
             <Menu>
               <MenuItem id="clear" onAction={() => handleClearChat()}>Clear Chat</MenuItem>
               <MenuItem id="settings" onAction={() => setShowApiKeyDialog(true)}>
-                {apiKey ? 'Change API Key' : 'Set API Key'}
+                {apiKey ? 'Change API Key' : localStorage.getItem('encryptedApiKey') ? 'Unlock API Key' : 'Set API Key'}
               </MenuItem>
               <MenuItem id="servers" onAction={() => setShowServerConfigSheet(true)}>
                 Configure Servers
@@ -1333,14 +1544,20 @@ function ChatInterface({
               >
                 <div className="text-center text-gray-500 dark:text-gray-400 py-4">
                   {apiKey ? (
-                    <p>Start a conversation! Using Anthropic API with your provided key.</p>
+                    <p>Start a conversation! Using Anthropic API with your secured key.</p>
                   ) : (
                     <>
-                      <p>Start a conversation! The MCP server will process your request and can use tools to assist you.</p>
-                      <p className="mt-2 text-sm">Server status: {status}</p>
+                      <p>An Anthropic API key is required to use this application.</p>
                       <p className="mt-2 text-sm">
-                        Active servers: {Object.keys(activeServers).join(', ') || 'None'}
+                        Click the "Set API Key" button in the menu to get started.
                       </p>
+                      <Button
+                        variant="primary"
+                        onPress={() => setShowApiKeyDialog(true)}
+                        className="mt-4"
+                      >
+                        Set API Key
+                      </Button>
                     </>
                   )}
                 </div>
@@ -1389,11 +1606,12 @@ function ChatInterface({
                 value={inputValue}
                 onChange={setInputValue}
                 aria-label="Type a message"
-                isDisabled={isProcessing || (!apiKey && status !== 'READY')}
+                isDisabled={isProcessing || !apiKey}
+                placeholder={!apiKey ? "API key required to use chat" : "Type a message..."}
               />
               <Button
                 type="submit"
-                isDisabled={isProcessing || !inputValue.trim() || (!apiKey && status !== 'READY')}
+                isDisabled={isProcessing || !inputValue.trim() || !apiKey}
                 className="flex items-center gap-2"
               >
                 {isProcessing ? 'Processing...' : 'Send'}

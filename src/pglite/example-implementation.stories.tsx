@@ -28,9 +28,7 @@ const SCHEMA = `
 // Create a decorator that uses the DatabaseProvider with a unique name for each story
 const withDatabaseContext = (Story: React.ComponentType, context: StoryContext) => (
   <DatabaseProvider schema={SCHEMA} dbName={`storybook-db-${context.name || context.id}`}>
-    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-      <Story />
-    </div>
+    <Story />
   </DatabaseProvider>
 );
 
