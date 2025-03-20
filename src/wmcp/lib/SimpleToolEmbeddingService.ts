@@ -217,7 +217,7 @@ class ToolEmbeddingService {
   private initWorker() {
     try {
       // Use the worker that matches the example approach
-      this.worker = new Worker(new URL('./workers/embedding-worker-new.js', import.meta.url), { 
+      this.worker = new Worker(new URL('./worker.js', import.meta.url), { 
         type: 'module' 
       });
       
