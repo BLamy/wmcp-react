@@ -16,7 +16,10 @@ export default defineConfig({
     },
     // Increase chunk size limit to avoid too many warnings
     chunkSizeWarningLimit: 800,
-
+  },
+  // Configure worker build
+  worker: {
+    format: 'es', // Use ES modules format instead of IIFE
   },
   optimizeDeps: {
     exclude: ['@electric-sql/pglite'],
