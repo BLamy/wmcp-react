@@ -1,0 +1,108 @@
+.lexical-editor-container {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.editor-inner {
+  position: relative;
+  background: white;
+}
+
+.editor-content {
+  max-height: 400px;
+  min-height: 200px;
+  overflow-y: auto;
+  position: relative;
+}
+
+.editor-input {
+  position: relative;
+  outline: none;
+  padding: 16px;
+  min-height: 150px;
+  resize: none;
+  tab-size: 1;
+  caret-color: #1d4ed8;
+}
+
+.editor-placeholder {
+  color: #9ca3af;
+  overflow: hidden;
+  position: absolute;
+  text-overflow: ellipsis;
+  top: 24px;
+  left: 16px;
+  user-select: none;
+  display: inline-block;
+  pointer-events: none;
+}
+
+/* Text formatting */
+.editor-text-bold {
+  font-weight: bold;
+}
+
+.editor-text-italic {
+  font-style: italic;
+}
+
+.editor-text-underline {
+  text-decoration: underline;
+}
+
+.editor-text-code {
+  background-color: #f3f4f6;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+/* Headings */
+.editor-heading-h1 {
+  font-size: 24px;
+  color: #111827;
+  font-weight: 800;
+  margin: 12px 0;
+}
+
+.editor-heading-h2 {
+  font-size: 20px;
+  color: #111827;
+  font-weight: 700;
+  margin: 10px 0;
+}
+
+.editor-heading-h3 {
+  font-size: 16px;
+  color: #111827;
+  font-weight: 600;
+  margin: 8px 0;
+}
+
+/* Quotes */
+.quote {
+  margin: 8px 0;
+  padding-left: 16px;
+  border-left: 4px solid #e5e7eb;
+  color: #4b5563;
+}
+
+/* Lists */
+ul, ol {
+  padding: 0;
+  margin: 0;
+  padding-left: 20px;
+}
+
+ul li, ol li {
+  margin: 8px 16px;
+}
+
+/* Paragraphs */
+.editor-paragraph {
+  margin: 8px 0;
+  position: relative;
+} 
