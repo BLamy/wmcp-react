@@ -667,13 +667,20 @@ function ApiKeyAlertDialog({ apiKey, onChange, isOpen, activeServers, onConfigur
           // Decrypt the API key
           const decryptedKey = await decryptData(key, encryptedKey);
           setInputValue(decryptedKey);
+          
+          // Set authentication status
+          setAuthStatus('authenticated');
+          
+          // Automatically save and close the dialog after a short delay
+          setTimeout(() => {
+            onChange(decryptedKey);
+          }, 500);
         } catch (decryptErr) {
           console.error('Decryption error:', decryptErr);
           setError('Failed to decrypt API key');
         }
       }
       
-      setAuthStatus('authenticated');
       setIsLoading(false);
     } catch (err: unknown) {
       const errorMessage = err instanceof WebAuthnError 
@@ -772,7 +779,7 @@ function ApiKeyAlertDialog({ apiKey, onChange, isOpen, activeServers, onConfigur
               </Button>
             )}
             
-            {(authStatus === 'authenticated' || authStatus === 'initial') && (
+            {authStatus === 'initial' && (
               <Button
                 variant="primary"
                 onPress={handleSave}
@@ -790,7 +797,7 @@ function ApiKeyAlertDialog({ apiKey, onChange, isOpen, activeServers, onConfigur
             'Please authenticate with your passkey to unlock your API key.' :
             authStatus === 'initial' ? 
               'Please provide your Anthropic API key to use Claude directly. Secure your key with a passkey for encrypted local storage.' :
-              'API key unlocked successfully. Click continue to proceed.'}
+              'API key unlocked successfully. Proceeding automatically...'}
         </p>
         
         <div className="mb-6">
@@ -822,7 +829,7 @@ function ApiKeyAlertDialog({ apiKey, onChange, isOpen, activeServers, onConfigur
         
         {authStatus === 'authenticated' && (
           <p className="text-sm text-green-500 dark:text-green-400 mb-4">
-            Passkey authenticated. Your API key is ready to use.
+            Passkey authenticated. Your API key is ready to use. Proceeding automatically...
           </p>
         )}
         
