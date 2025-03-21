@@ -1,9 +1,9 @@
 // example.tsx - Complete example demonstrating the system
 import React, { useState, useEffect } from 'react';
 import { DatabaseProvider, useTable, useDatabase } from './db-context';
-import { Table, TableHeader, Column, Row, Cell } from '../components/aria/Table';
+import { Table, TableHeader, Column, Row, Cell } from '@/components/aria/Table';
 import { TableBody } from 'react-aria-components';
-import LexicalEditor from './LexicalEditor';
+import LexicalEditor from '@/components/lexical/LexicalEditor';
 
 // Define our schema for the Todo app
 const SCHEMA = `

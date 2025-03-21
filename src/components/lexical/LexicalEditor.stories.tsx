@@ -1,10 +1,10 @@
 import React from 'react';
 import { Meta, StoryObj } from '@storybook/react';
-import { LexicalEditor } from './LexicalEditor';
+import { LexicalEditor } from '@/components/lexical/LexicalEditor';
 
 // Define metadata for the stories
 const meta: Meta<typeof LexicalEditor> = {
-  title: 'PGlite/Lexical Editor',
+  title: 'Components/Lexical Editor',
   component: LexicalEditor,
   parameters: {
     layout: 'padded',

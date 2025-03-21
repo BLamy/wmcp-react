@@ -1,11 +1,7 @@
-// Import transformers.js
 import { pipeline, env } from '@huggingface/transformers';
 
 // Skip local model check
 env.allowLocalModels = false;
-
-// Status update: let the main thread know we're initializing
-self.postMessage({ status: 'initiate' });
 
 // Use the Singleton pattern to enable lazy construction of the pipeline.
 class PipelineSingleton {
@@ -27,34 +23,26 @@ class PipelineSingleton {
 
 // Listen for messages from the main thread
 self.addEventListener('message', async (event) => {
-  try {
-    // Retrieve the classification pipeline. When called for the first time,
-    // this will load the pipeline and save it for future use.
-    let classifier = await PipelineSingleton.getInstance((x) => {
-      // We also add a progress callback to the pipeline so that we can
-      // track model loading.
-      self.postMessage(x);
-    });
+  // Retrieve the classification pipeline. When called for the first time,
+  // this will load the pipeline and save it for future use.
+  let classifier = await PipelineSingleton.getInstance((x) => {
+    // We also add a progress callback to the pipeline so that we can
+    // track model loading.
+    self.postMessage(x);
+  });
 
-    // Actually perform the classification
-    let output = await classifier(event.data.text, {
-      pooling: 'mean',
-      normalize: true,
-    });
+  // Actually perform the classification
+  let output = await classifier(event.data.text, {
+    pooling: 'mean',
+    normalize: true,
+  });
 
-    // Extract the embedding output
-    const embedding = Array.from(output.data);
+  // Extract the embedding output
+  const embedding = Array.from(output.data);
 
-    // Send the output back to the main thread
-    self.postMessage({
-      status: 'complete',
-      embedding,
-    });
-  } catch (error) {
-    console.error('Error:', error);
-    self.postMessage({ 
-      status: 'error',
-      message: 'Failed to generate embedding'
-    });
-  }
+  // Send the output back to the main thread
+  self.postMessage({
+    status: 'complete',
+    embedding,
+  });
 });

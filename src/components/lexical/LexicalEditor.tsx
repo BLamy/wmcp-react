@@ -16,7 +16,7 @@ import { CodeHighlightNode, CodeNode } from '@lexical/code';
 import { AutoLinkNode, LinkNode } from '@lexical/link';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { $getRoot, $createParagraphNode, $createTextNode, EditorState, SerializedEditorState } from 'lexical';
-import ToolbarPlugin from './plugins/ToolbarPlugin';
+import ToolbarPlugin from '../../pglite/plugins/ToolbarPlugin';
 import './LexicalEditor.css';
 
 // Define theme
