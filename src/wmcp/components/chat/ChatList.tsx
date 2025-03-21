@@ -5,16 +5,22 @@ export interface ChatListProps {
   messages: { id: string, sender: string, date: string, subject: string, message: string }[];
   onMessageClick?: (messageId: string) => void;
   onMessageDelete?: (messageId: string) => void;
+  selectedId?: string;
 }
 
-export function ChatList({ messages, onMessageClick, onMessageDelete }: ChatListProps) {
+export function ChatList({ messages, onMessageClick, onMessageDelete, selectedId }: ChatListProps) {
   const [localMessages, setLocalMessages] = useState(messages);
   const [selectionMode, setSelectionMode] = useState<'none' | 'single' | 'multiple'>('none');
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setLocalMessages(messages);
-  }, [messages]);
+    
+    // Set initial selection if selectedId is provided
+    if (selectedId && !selectedKeys.has(selectedId)) {
+      setSelectedKeys(new Set([selectedId]));
+    }
+  }, [messages, selectedId]);
 
   const handleDelete = () => {
     if (onMessageDelete) {
@@ -38,7 +44,13 @@ export function ChatList({ messages, onMessageClick, onMessageDelete }: ChatList
   const handleMessageClick = (messageId: string) => {
     console.log('Message clicked in ChatList:', messageId);
     if (onMessageClick) {
+      console.log('Calling onMessageClick callback with message ID:', messageId);
       onMessageClick(messageId);
+      // Update selected key
+      setSelectedKeys(new Set([messageId]));
+      console.log('Updated selected keys:', messageId);
+    } else {
+      console.warn('No onMessageClick handler provided');
     }
   };
 
@@ -91,7 +103,9 @@ export function ChatList({ messages, onMessageClick, onMessageDelete }: ChatList
         >
           {message => (
             <div 
-              className="px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer border-b border-gray-100 dark:border-gray-800" 
+              className={`px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer border-b border-gray-100 dark:border-gray-800 ${
+                selectedKeys.has(message.id) ? 'bg-blue-50 dark:bg-blue-900/30' : ''
+              }`}
               key={message.id}
               onClick={() => selectionMode === 'none' && handleMessageClick(message.id)}
             >

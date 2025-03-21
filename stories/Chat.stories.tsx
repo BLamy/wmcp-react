@@ -81,34 +81,73 @@ const initDatabase = async (db: PGlite) => {
   `);
 };
 
+// The SQL schema to use for chat functionality
+const CHAT_SCHEMA = `
+  CREATE EXTENSION IF NOT EXISTS vector;
+  
+  CREATE TABLE IF NOT EXISTS chat_messages (
+    id TEXT PRIMARY KEY,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    session_id TEXT,
+    metadata JSONB
+  );
+  
+  CREATE TABLE IF NOT EXISTS chat_sessions (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+  
+  CREATE TABLE IF NOT EXISTS tool_calls (
+    id TEXT PRIMARY KEY,
+    message_id TEXT NOT NULL,
+    function_name TEXT NOT NULL,
+    arguments JSONB,
+    FOREIGN KEY (message_id) REFERENCES chat_messages(id) ON DELETE CASCADE
+  );
+`;
+
 // Create a decorator to provide the database context
 const withDatabaseContext = (Story: React.ComponentType) => {
-  const [db, setDb] = React.useState<PGlite | null>(null);
+  // Use a reference to track initialization
+  const [initialized, setInitialized] = React.useState(false);
   
   React.useEffect(() => {
-    const setupDb = async () => {
-      const metaDb = new PGlite('idb://chat-sessions', {
-        extensions: {
-          vector,
-        },
-      });
-      
-      await metaDb.waitReady;
-      await initDatabase(metaDb);
-      setDb(metaDb);
+    // One-time initialization of the database with sample data
+    const initializeWithSampleData = async () => {
+      try {
+        // Create a temporary database instance for initialization
+        const tempDb = new PGlite('idb://chat-sessions', {
+          extensions: { vector },
+        });
+        
+        await tempDb.waitReady;
+        console.log('Initializing database with sample data for Storybook');
+        
+        // Initialize with sample data
+        await initDatabase(tempDb);
+        
+        console.log('Sample data initialization complete');
+        setInitialized(true);
+      } catch (error) {
+        console.error('Failed to initialize sample data:', error);
+      }
     };
     
-    setupDb();
+    initializeWithSampleData();
   }, []);
   
-  if (!db) {
-    return <div>Loading database...</div>;
+  if (!initialized) {
+    return <div>Initializing database with sample data...</div>;
   }
   
   return (
-    <DatabaseContext.Provider value={{ db, operations: null, isInitialized: true, error: null }}>
+    <DatabaseProvider schema={CHAT_SCHEMA} dbName="chat-sessions">
       <Story />
-    </DatabaseContext.Provider>
+    </DatabaseProvider>
   );
 };
 
@@ -130,6 +169,7 @@ export const Example: Story = {
 export const WithChatSessions: Story = {
   args: {
     enablePersistence: true,
+    sessionId: 'session-1',
     serverConfigs: {
       memory: {
         command: 'npx',
@@ -145,6 +185,7 @@ export const WithChatSessions: Story = {
 export const CustomServerConfig: Story = {
   args: {
     enablePersistence: true,
+    sessionId: 'session-1',
     serverConfigs: {
       'memory': {
         command: 'npx',

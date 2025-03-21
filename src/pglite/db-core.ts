@@ -1,5 +1,6 @@
 // db-core.ts - Core database functionality
 import { PGlite } from '@electric-sql/pglite';
+// @ts-expect-error - can't find the type for vector
 import { vector } from '@electric-sql/pglite/vector';
 import { ParseSchema, DBOperations } from './types';
 
@@ -28,13 +29,19 @@ export async function getDB(dbName: string = 'postgres-typesafe-db') {
  * Initialize the database schema
  */
 export async function initSchema(db: PGlite, schemaSQL: string): Promise<void> {
-  // Enable vector extension if needed
-  if (schemaSQL.toLowerCase().includes('vector')) {
-    await db.exec('CREATE EXTENSION IF NOT EXISTS vector;');
+  try {
+    // Enable vector extension if needed
+    if (schemaSQL.toLowerCase().includes('vector')) {
+      await db.exec('CREATE EXTENSION IF NOT EXISTS vector;');
+    }
+    
+    // Execute the schema SQL
+    await db.exec(schemaSQL);
+    console.log('Schema initialized successfully');
+  } catch (error) {
+    console.error('Error initializing schema:', error);
+    throw error;
   }
-  
-  // Execute the schema SQL
-  await db.exec(schemaSQL);
 }
 
 /**

@@ -244,7 +244,7 @@ export default function WebContainerProvider({
                         }
                         
                         // Helper function to recursively write directory contents
-                        async function writeDirectoryContents(container, basePath, dirContents) {
+                        async function writeDirectoryContents(container: WebContainer, basePath: string, dirContents: Record<string, any>) {
                             for (const name in dirContents) {
                                 const entry = dirContents[name];
                                 const fullPath = `${basePath}/${name}`;
