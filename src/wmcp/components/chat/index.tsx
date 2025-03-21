@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
 
 import { Form, DialogTrigger, Checkbox } from 'react-aria-components';
 import { Button } from '@/components/aria/Button';
 import { TextField } from '../../../components/aria/TextField';
 import { MenuTrigger, Modal, ModalOverlay, Dialog, Heading } from 'react-aria-components';
-import { WrenchIcon, Wand2, Send, Settings, MoreHorizontal, Plus, AlertCircle, Server, Save, Check, Info, X, Key } from 'lucide-react';
+import { WrenchIcon, Wand2, Send, Settings, MoreHorizontal, Plus, AlertCircle, Server, Save, Check, Info, X, Key, Database } from 'lucide-react';
 import { Menu, MenuItem, MenuSection } from '@/components/aria/Menu';
 import { animate, AnimatePresence, motion, useMotionTemplate, useMotionValue, useMotionValueEvent, useTransform } from 'framer-motion';
 import { AlertDialog } from '@/components/aria/AlertDialog';
@@ -16,7 +16,7 @@ import {
   DisclosurePanel 
 } from '@/components/aria/Disclosure';
 import { ActionCard } from '@/wmcp/components/layout/ActionCard';
-
+import { ChatList } from '@/wmcp/components/chat/ChatList';
 
 import { Tool } from '@modelcontextprotocol/sdk/types';
 import { ServerConfig } from '../../lib/McpClientManager';
@@ -25,6 +25,7 @@ import { startRegistration, startAuthentication, WebAuthnError } from '../../lib
 import { deriveKey, encryptData, decryptData } from '../../lib/utils';
 import { LoadingIndicator } from '../status/LoadingIndicator';
 import { ErrorDisplay } from '../status/ErrorDisplay';
+import { DatabaseContext } from '../../../pglite/db-context';
 
 // Extend the ToolDefinition type to include serverName
 interface ToolDefinition extends Tool {
@@ -34,14 +35,16 @@ interface ToolDefinition extends Tool {
 // Define the types for our chat messages
 interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
   timestamp: Date;
   toolCall?: {
+    id?: string;
     name: string;
     arguments: Record<string, any>;
   };
   toolResult?: any;
+  metadata?: Record<string, any>;
 }
 
 // Interface for modeling the generate response
@@ -923,45 +926,32 @@ function ErrorSheet({ error, isOpen, onOpenChange }: ErrorSheetProps) {
   );
 }
 
-// Main Chat component (now with server configuration)
-export function Chat({ serverConfigs = DEFAULT_SERVER_CONFIGS }: { serverConfigs?: Record<string, ServerConfig> }) {
-  const [activeServers, setActiveServers] = useState<Record<string, ServerConfig>>(serverConfigs);
-  return (
-      <ChatInterface 
-        availableServers={serverConfigs} 
-        activeServers={activeServers}
-        onUpdateServers={setActiveServers}
-      />
-  );
-}
-
-// ChatInterface component handling the chat functionality
-function ChatInterface({ 
-  availableServers, 
-  activeServers, 
-  onUpdateServers 
+// Main Chat component (now with server configuration and persistence option)
+export function Chat({ 
+  serverConfigs = DEFAULT_SERVER_CONFIGS, 
+  enablePersistence = false,
+  sessionId = null
 }: { 
-  availableServers: Record<string, ServerConfig>;
-  activeServers: Record<string, ServerConfig>;
-  onUpdateServers: (servers: Record<string, ServerConfig>) => void;
+  serverConfigs?: Record<string, ServerConfig>;
+  enablePersistence?: boolean;
+  sessionId?: string | null;
 }) {
+  const [activeServers, setActiveServers] = useState<Record<string, ServerConfig>>(serverConfigs);
+  const [chatSessions, setChatSessions] = useState<{ id: string; name: string; created_at: string; updated_at: string }[]>([]);
+  const [showChatList, setShowChatList] = useState<boolean>(false);
+  // Track the current session ID regardless of prop
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(sessionId);
+
+  // Access database context if persistence is enabled
+  const { db, operations, isInitialized, error: dbError } = useContext(DatabaseContext);
+  
   // State for API key
   const [apiKey, setApiKey] = useState<string>('');
   const [showApiKeyDialog, setShowApiKeyDialog] = useState<boolean>(true);
   const [showServerConfigSheet, setShowServerConfigSheet] = useState<boolean>(false);
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
   
-  // Check for encrypted API key in localStorage on init
-  useEffect(() => {
-    const hasEncryptedKey = localStorage.getItem('encryptedApiKey') !== null;
-    
-    if (hasEncryptedKey) {
-      // Always show the dialog if we have an encrypted key but no active key
-      setShowApiKeyDialog(true);
-    }
-  }, []);
-  
-  // State for chat
+  // Chat sessions state
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
@@ -999,132 +989,436 @@ function ChatInterface({
     setTools(mcpTools);
   }, [mcpTools]);
 
-  // Method to call Anthropic API directly
-  const callAnthropicAPI = async (messageHistory: { role: string; content: string }[]): Promise<GenerateResponse> => {
-    try {
-      // Format tools for Anthropic API
-      const formattedTools = tools?.map(tool => ({
-        name: tool.name,
-        description: tool.description || '',
-        input_schema: tool.inputSchema || {}
-      })) || [];
-      
-      // Prepare the request body
-      const requestBody = {
-        model: 'claude-3-7-sonnet-20250219',
-        max_tokens: 4000,
-        messages: messageHistory.filter(msg => msg.role !== 'system'),
-        tools: formattedTools,
-        system: messageHistory.find(msg => msg.role === 'system')?.content || 
-                'You are a helpful assistant with access to tools. Use the provided tools when appropriate to assist the user.'
-      };
-      
-      // Make API request to Anthropic
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
-        },
-        body: JSON.stringify(requestBody)
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Anthropic API error: ${errorData.error?.message || JSON.stringify(errorData)}`);
-      }
-      
-      const responseData = await response.json();
-      
-      // Process the response
-      if (responseData.content && responseData.content.length > 0) {
-        // Check if there's a tool_use block
-        const toolUseBlock = responseData.content.find((block: any) => block.type === 'tool_use');
-        
-        if (toolUseBlock) {
-          return {
-            text: responseData.content.find((block: any) => block.type === 'text')?.text || 'I need to use a tool to help with this.',
-            toolCalls: [{
-              name: toolUseBlock.name,
-              arguments: toolUseBlock.input
-            }]
-          };
-        } else {
-          return {
-            text: responseData.content[0]?.text || "I couldn't generate a response."
-          };
-        }
-      } else {
-        throw new Error('Invalid response from Anthropic API');
-      }
-    } catch (error) {
-      console.error('Error calling Anthropic API:', error);
-      throw error;
-    }
+  // Add persisted state indicator
+  const [isPersisted, setIsPersisted] = useState<boolean>(false);
+  
+  // Format chat sessions for the ChatList component
+  const formatChatSessionsForList = (sessions: { id: string; name: string; created_at: string; updated_at: string }[]) => {
+    return sessions.map(session => ({
+      id: session.id,
+      sender: 'Chat Session',
+      date: new Date(session.updated_at).toLocaleString(),
+      subject: session.name,
+      message: `Chat session created on ${new Date(session.created_at).toLocaleString()}`
+    }));
   };
-
-  // Generate a response using MCP or direct Anthropic API call
-  const generateResponse = async (messageHistory: { role: string; content: string }[]): Promise<GenerateResponse> => {
-    // If API key is set, use direct Anthropic API call
-    if (apiKey) {
-      return callAnthropicAPI(messageHistory);
+  
+  // Load chat sessions from database if persistence is enabled
+  const loadChatSessions = useCallback(async () => {
+    if (!db || !enablePersistence) {
+      console.log('Database not available or persistence not enabled');
+      return;
     }
     
-    // Otherwise, use MCP server if available or fallback to mock responses
-    if (status === 'READY' && tools) {
-      try {
-        // In a real implementation, this would call the MCP server's generate method
-        // For now, we'll simulate a response
+    try {
+      // Check if tables exist
+      console.log('Checking database schema...');
+      const tablesResult = await db.query<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+      );
+      
+      const tableNames = tablesResult.rows.map(row => row.name);
+      console.log('Existing tables:', tableNames);
+      
+      // Create tables if they don't exist
+      if (!tableNames.includes('chat_sessions')) {
+        console.log('Creating chat_sessions table');
+        await db.exec(`
+          CREATE TABLE IF NOT EXISTS chat_sessions (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+      }
+      
+      if (!tableNames.includes('chat_messages')) {
+        console.log('Creating chat_messages table');
+        await db.exec(`
+          CREATE TABLE IF NOT EXISTS chat_messages (
+            id TEXT PRIMARY KEY,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            session_id TEXT,
+            metadata TEXT,
+            FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
+          )
+        `);
+      }
+      
+      if (!tableNames.includes('tool_calls')) {
+        console.log('Creating tool_calls table');
+        await db.exec(`
+          CREATE TABLE IF NOT EXISTS tool_calls (
+            id TEXT PRIMARY KEY,
+            message_id TEXT NOT NULL,
+            function_name TEXT NOT NULL,
+            arguments TEXT NOT NULL,
+            FOREIGN KEY (message_id) REFERENCES chat_messages(id)
+          )
+        `);
+      }
+      
+      // Query for all chat sessions ordered by updated_at
+      const sessionsResult = await db.query<{ id: string; name: string; created_at: string; updated_at: string }>(
+        'SELECT id, name, created_at, updated_at FROM chat_sessions ORDER BY updated_at DESC'
+      );
+      
+      console.log(`Found ${sessionsResult.rows.length} chat sessions:`, JSON.stringify(sessionsResult.rows));
+      
+      if (sessionsResult.rows.length === 0) {
+        // Create a default session if none exist
+        const defaultSessionId = `session-${Date.now()}`;
+        console.log(`Creating default session with ID: ${defaultSessionId}`);
+        await db.exec(`
+          INSERT INTO chat_sessions (id, name, created_at, updated_at)
+          VALUES ('${defaultSessionId}', 'New Chat', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `);
         
-        // Simple response if the input contains a weather query
-        const lastMessage = messageHistory[messageHistory.length - 1].content.toLowerCase();
-        if (lastMessage.includes('weather') && tools?.some(tool => tool.name === 'get_current_weather')) {
-          return {
-            text: "I'll check the weather for you.",
-            toolCalls: [
-              {
-                name: 'get_current_weather',
-                arguments: {
-                  location: 'San Francisco, CA',
-                  unit: 'fahrenheit'
-                }
-              }
-            ]
-          };
+        // Set current session to the default one
+        setCurrentSessionId(defaultSessionId);
+        
+        // Load sessions again
+        const newSessionsResult = await db.query<{ id: string; name: string; created_at: string; updated_at: string }>(
+          'SELECT id, name, created_at, updated_at FROM chat_sessions ORDER BY updated_at DESC'
+        );
+        
+        console.log('New sessions after creating default:', JSON.stringify(newSessionsResult.rows));
+        setChatSessions(newSessionsResult.rows);
+        console.log('Updated chat sessions state with default session');
+      } else {
+        setChatSessions(sessionsResult.rows);
+        console.log('Updated chat sessions state with existing sessions:', JSON.stringify(sessionsResult.rows));
+        
+        // If currentSessionId is not set, use the most recent session
+        if (!currentSessionId) {
+          const mostRecentSession = sessionsResult.rows[0].id;
+          console.log(`Setting current session to most recent: ${mostRecentSession}`);
+          setCurrentSessionId(mostRecentSession);
         }
-        
-        // Simple response if the input contains a search query
-        if ((lastMessage.includes('search') || lastMessage.includes('find')) && tools?.some(tool => tool.name === 'search_web')) {
-          return {
-            text: "Let me search that for you.",
-            toolCalls: [
-              {
-                name: 'search_web',
-                arguments: {
-                  query: lastMessage.replace(/search for|search|find|look up/gi, '').trim()
-                }
-              }
-            ]
-          };
-        }
-        
-        // Default response
-        return {
-          text: `I received your message: "${lastMessage}". How else can I help you?`
+      }
+      
+      // Debug: Check the formatted sessions
+      const formattedSessions = formatChatSessionsForList(sessionsResult.rows);
+      console.log('Formatted sessions for ChatList:', JSON.stringify(formattedSessions));
+      
+    } catch (error) {
+      console.error('Error loading chat sessions:', error);
+    }
+  }, [db, enablePersistence, currentSessionId, formatChatSessionsForList]);
+
+  // Modify loadChatHistory to support loading messages for a specific session
+  const loadChatHistory = useCallback(async () => {
+    if (!db || !enablePersistence) return;
+    
+    try {
+      let query = 'SELECT id, role, content, date, metadata FROM chat_messages';
+      
+      // If currentSessionId is provided, filter messages by that session
+      if (currentSessionId) {
+        query += ` WHERE session_id = '${currentSessionId}'`;
+      }
+      
+      query += ' ORDER BY date ASC';
+      
+      const result = await db.query<{ id: string; role: string; content: string; date: string; metadata: string }>(query);
+      
+      const loadedMessages: ChatMessage[] = [];
+      
+      for (const row of result.rows) {
+        const metadata = row.metadata ? JSON.parse(row.metadata) : {};
+        const message: ChatMessage = {
+          id: row.id,
+          role: row.role as 'system' | 'user' | 'assistant' | 'tool',
+          content: row.content,
+          timestamp: new Date(row.date),
+          metadata,
         };
-      } catch (error) {
-        console.error('Error generating response:', error);
-        throw error;
+        
+        // Check if this message has tool calls
+        if (row.role === 'assistant') {
+          const toolCallsResult = await db.query<{ id: string; function_name: string; arguments: string }>(
+            `SELECT id, function_name, arguments FROM tool_calls WHERE message_id = '${row.id}'`
+          );
+          
+          if (toolCallsResult.rows.length > 0) {
+            message.toolCall = {
+              id: toolCallsResult.rows[0].id,
+              name: toolCallsResult.rows[0].function_name,
+              arguments: JSON.parse(toolCallsResult.rows[0].arguments)
+            };
+          }
+        }
+        
+        loadedMessages.push(message);
+      }
+      
+      setMessages(loadedMessages);
+    } catch (error) {
+      console.error('Error loading chat history:', error);
+    }
+  }, [db, enablePersistence, currentSessionId]);
+  
+  // Add function to handle session selection
+  const handleSessionSelect = useCallback(async (selectedSessionId: string) => {
+    console.log('handleSessionSelect called with ID:', selectedSessionId);
+    
+    if (!db) {
+      console.error('Database not available');
+      return;
+    }
+    
+    try {
+      // Set the current session ID
+      setCurrentSessionId(selectedSessionId);
+      console.log('Current session ID set to:', selectedSessionId);
+      
+      // Update session's updated_at timestamp
+      await db.exec(`
+        UPDATE chat_sessions
+        SET updated_at = CURRENT_TIMESTAMP
+        WHERE id = '${selectedSessionId}'
+      `);
+      
+      // Load messages for this session
+      const result = await db.query<{ id: string; role: string; content: string; date: string; metadata: string }>(
+        `SELECT id, role, content, date, metadata FROM chat_messages WHERE session_id = '${selectedSessionId}' ORDER BY date ASC`
+      );
+      
+      console.log(`Found ${result.rows.length} messages for session ${selectedSessionId}`);
+      
+      const loadedMessages: ChatMessage[] = [];
+      
+      for (const row of result.rows) {
+        const metadata = row.metadata ? JSON.parse(row.metadata) : {};
+        const message: ChatMessage = {
+          id: row.id,
+          role: row.role as 'system' | 'user' | 'assistant' | 'tool',
+          content: row.content,
+          timestamp: new Date(row.date),
+          metadata: { ...metadata, session_id: selectedSessionId },
+        };
+        
+        // Check if this message has tool calls
+        if (row.role === 'assistant') {
+          const toolCallsResult = await db.query<{ id: string; function_name: string; arguments: string }>(
+            `SELECT id, function_name, arguments FROM tool_calls WHERE message_id = '${row.id}'`
+          );
+          
+          if (toolCallsResult.rows.length > 0) {
+            message.toolCall = {
+              id: toolCallsResult.rows[0].id,
+              name: toolCallsResult.rows[0].function_name,
+              arguments: JSON.parse(toolCallsResult.rows[0].arguments)
+            };
+          }
+        }
+        
+        loadedMessages.push(message);
+      }
+      
+      console.log('Setting messages state with loaded messages:', loadedMessages);
+      setMessages(loadedMessages);
+      
+      // If no messages are found, add a system message
+      if (loadedMessages.length === 0) {
+        console.log('No messages found, adding default system message');
+        setMessages([{
+          id: Date.now().toString(),
+          role: 'system',
+          content: 'I am an AI assistant that can help you with various tasks using tools.',
+          timestamp: new Date()
+        }]);
+      }
+      
+      setShowChatList(false);
+    } catch (error) {
+      console.error('Error selecting chat session:', error);
+    }
+  }, [db]);
+  
+  // Modify saveMessages to include session_id in metadata
+  const saveMessages = useCallback(async (messagesToSave: ChatMessage[]) => {
+    if (!db || !enablePersistence) return;
+    
+    try {
+      for (const message of messagesToSave) {
+        const messageMetadata = {
+          ...message.metadata,
+          session_id: currentSessionId || 'default'
+        };
+        
+        // Insert the message
+        await db.exec(`
+          INSERT INTO chat_messages (id, role, content, date, session_id, metadata)
+          VALUES (
+            '${message.id}',
+            '${message.role}',
+            '${message.content.replace(/'/g, "''")}',
+            CURRENT_TIMESTAMP,
+            '${currentSessionId || 'default'}',
+            '${JSON.stringify(messageMetadata).replace(/'/g, "''")}'
+          )
+          ON CONFLICT (id) DO UPDATE
+          SET content = '${message.content.replace(/'/g, "''")}',
+              metadata = '${JSON.stringify(messageMetadata).replace(/'/g, "''")}'
+        `);
+        
+        // If the message has tool calls, save them too
+        if (message.toolCall) {
+          await db.exec(`
+            INSERT INTO tool_calls (id, message_id, function_name, arguments)
+            VALUES (
+              '${message.toolCall.id}',
+              '${message.id}',
+              '${message.toolCall.name}',
+              '${JSON.stringify(message.toolCall.arguments).replace(/'/g, "''")}'
+            )
+            ON CONFLICT (id) DO UPDATE
+            SET function_name = '${message.toolCall.name}',
+                arguments = '${JSON.stringify(message.toolCall.arguments).replace(/'/g, "''")}'
+          `);
+        }
+      }
+      
+      // Update session name with the first user message if it's "New Chat"
+      if (currentSessionId) {
+        const firstUserMessage = messagesToSave.find(msg => msg.role === 'user');
+        if (firstUserMessage) {
+          const sessionResult = await db.query<{ name: string }>(
+            `SELECT name FROM chat_sessions WHERE id = '${currentSessionId}'`
+          );
+          
+          if (sessionResult.rows.length > 0 && sessionResult.rows[0].name === 'New Chat') {
+            // Use the first 20 characters of the user message as the session name
+            const newName = firstUserMessage.content.length > 20
+              ? firstUserMessage.content.substring(0, 20) + '...'
+              : firstUserMessage.content;
+              
+            await db.exec(`
+              UPDATE chat_sessions
+              SET name = '${newName.replace(/'/g, "''")}',
+                  updated_at = CURRENT_TIMESTAMP
+              WHERE id = '${currentSessionId}'
+            `);
+          } else {
+            // Just update the timestamp
+            await db.exec(`
+              UPDATE chat_sessions
+              SET updated_at = CURRENT_TIMESTAMP
+              WHERE id = '${currentSessionId}'
+            `);
+          }
+        }
+      }
+      
+      // Refresh chat sessions
+      loadChatSessions();
+    } catch (error) {
+      console.error('Error saving messages:', error);
+    }
+  }, [db, enablePersistence, currentSessionId, loadChatSessions]);
+  
+  // Add function to handle new chat creation
+  const handleNewChat = useCallback(async () => {
+    if (!db) return;
+    
+    try {
+      // Create new session
+      const newSessionId = `session-${Date.now()}`;
+      console.log(`Creating new chat session with ID: ${newSessionId}`);
+      
+      await db.exec(`
+        INSERT INTO chat_sessions (id, name, created_at, updated_at)
+        VALUES ('${newSessionId}', 'New Chat', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `);
+      
+      // Set current session ID to the new session
+      setCurrentSessionId(newSessionId);
+      
+      // Reset messages with just a system message
+      const systemMessage = {
+        id: Date.now().toString(),
+        role: 'system' as 'system', // Add type assertion here
+        content: 'I am an AI assistant that can help you with various tasks using tools.',
+        timestamp: new Date(),
+        metadata: { session_id: newSessionId }
+      };
+      
+      setMessages([systemMessage]);
+      
+      // Save the system message to the database
+      await saveMessages([systemMessage]);
+      
+      // Reload sessions
+      loadChatSessions();
+      
+      // Hide chat list
+      setShowChatList(false);
+    } catch (error) {
+      console.error('Error creating new chat:', error);
+    }
+  }, [db, loadChatSessions, saveMessages]);
+  
+  // Add function to handle session deletion
+  const handleDeleteSession = useCallback(async (sessionIdToDelete: string) => {
+    if (!db) return;
+    
+    try {
+      // Delete messages with this session_id
+      await db.exec(`DELETE FROM chat_messages WHERE session_id = '${sessionIdToDelete}'`);
+      
+      // Delete the session
+      await db.exec(`DELETE FROM chat_sessions WHERE id = '${sessionIdToDelete}'`);
+      
+      // Reload sessions
+      loadChatSessions();
+      
+      // Clear messages if currently viewing this session
+      if (currentSessionId === sessionIdToDelete) {
+        setCurrentSessionId(null);
+        setMessages([{
+          id: Date.now().toString(),
+          role: 'system',
+          content: 'I am an AI assistant that can help you with various tasks using tools.',
+          timestamp: new Date()
+        }]);
+      }
+    } catch (error) {
+      console.error('Error deleting chat session:', error);
+    }
+  }, [db, currentSessionId, loadChatSessions]);
+  
+  // Initialize persistence state when the component mounts
+  useEffect(() => {
+    if (enablePersistence) {
+      console.log('Persistence enabled, initializing DB state');
+      setIsPersisted(true);
+      
+      // Wait for DB to be initialized before loading sessions
+      if (isInitialized && db) {
+        console.log('Database initialized, loading chat sessions');
+        loadChatSessions();
+      } else if (db) {
+        console.log('Database not yet initialized, waiting...');
+      } else {
+        console.log('Database not available');
       }
     } else {
-      // Fallback response if MCP server is not ready
-      return {
-        text: "I'm sorry, the server is not ready yet. Please try again in a moment."
-      };
+      console.log('Persistence disabled');
+      setIsPersisted(false);
     }
-  };
+  }, [enablePersistence, isInitialized, db, loadChatSessions]);
+  
+  // Watch for changes to currentSessionId and load the appropriate chat history
+  useEffect(() => {
+    if (enablePersistence && currentSessionId && isInitialized) {
+      console.log(`Loading chat history for session ID: ${currentSessionId}`);
+      loadChatHistory();
+    }
+  }, [enablePersistence, currentSessionId, loadChatHistory, isInitialized]);
 
   // Scroll to bottom when messages update
   useEffect(() => {
@@ -1147,6 +1441,84 @@ function ChatInterface({
     }
   }, [showErrorSheet]);
 
+  // Initialize currentSessionId from prop when component mounts
+  useEffect(() => {
+    if (sessionId) {
+      setCurrentSessionId(sessionId);
+    }
+  }, [sessionId]);
+
+  // Generate a response from Claude API or MCP
+  const generateResponse = async (messages: { role: string; content: string }[]): Promise<GenerateResponse> => {
+    if (apiKey) {
+      return callAnthropicAPI(messages);
+    } else {
+      throw new Error("API key is required. Please set your API key.");
+    }
+  };
+
+  // Call the Anthropic API directly
+  const callAnthropicAPI = async (messages: { role: string; content: string }[]): Promise<GenerateResponse> => {
+    try {
+      const systemMessage = messages.find(msg => msg.role === 'system');
+      const otherMessages = messages.filter(msg => msg.role !== 'system');
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-3-7-sonnet-20250219',
+          max_tokens: 4000,
+          messages: otherMessages,
+          system: systemMessage?.content || 'You are a helpful assistant with access to tools. Use the provided tools when appropriate to assist the user.',
+          tools: tools.map(tool => ({
+            name: tool.name,
+            description: tool.description || '',
+            input_schema: tool.inputSchema || {}
+          }))
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Anthropic API error: ${errorData.error?.message || JSON.stringify(errorData)}`);
+      }
+
+      const data = await response.json();
+      
+      // Define a type for the content items
+      type ContentItem = {
+        type: string;
+        text?: string;
+        name?: string;
+        input?: Record<string, any>;
+      };
+      
+      // Check for tool calls in the response
+      const toolUseItem = data.content.find((c: ContentItem) => c.type === 'tool_use');
+      const toolCalls = toolUseItem
+        ? [{
+            name: toolUseItem.name!,
+            arguments: toolUseItem.input!
+          }]
+        : undefined;
+      
+      // Get the text content
+      const textItem = data.content.find((c: ContentItem) => c.type === 'text');
+      const text = textItem?.text || '';
+      
+      return { text, toolCalls };
+    } catch (error) {
+      console.error('Error calling Anthropic API:', error);
+      throw error;
+    }
+  };
+
   // Handle sending a message
   const handleSendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -1167,6 +1539,22 @@ function ChatInterface({
       timestamp: new Date()
     };
     
+    // Check if we need to create a new session for this message
+    if (enablePersistence && !currentSessionId) {
+      try {
+        // Create a new default session
+        const newSessionId = `session-${Date.now()}`;
+        await db?.exec(`
+          INSERT INTO chat_sessions (id, name, created_at, updated_at)
+          VALUES ('${newSessionId}', 'New Chat', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `);
+        setCurrentSessionId(newSessionId);
+      } catch (error) {
+        console.error('Error creating new session for message:', error);
+      }
+    }
+    
+    // Add the message to the UI
     setMessages(prev => [...prev, newUserMessage]);
     setInputValue('');
     setIsProcessing(true);
@@ -1190,12 +1578,19 @@ function ChatInterface({
           content: result.text || 'I need to use a tool to help with this.',
           timestamp: new Date(),
           toolCall: {
+            id: Date.now().toString(),
             name: toolCall.name,
             arguments: toolCall.arguments
           }
         };
         
+        // Add the assistant message to the UI
         setMessages(prev => [...prev, assistantMessage]);
+        
+        // Save the user message and the assistant's tool call to the database
+        if (enablePersistence) {
+          await saveMessages([newUserMessage, assistantMessage]);
+        }
         
         // Execute the tool
         try {
@@ -1272,7 +1667,13 @@ function ChatInterface({
               timestamp: new Date()
             };
             
+            // Add the follow-up message to the UI
             setMessages(prev => [...prev, followUpMessage]);
+            
+            // Save the follow-up message to the database
+            if (enablePersistence) {
+              await saveMessages([followUpMessage]);
+            }
           } else {
             // Generate a follow-up response that includes the tool result using MCP
             const followUpResult = await generateResponse([
@@ -1301,7 +1702,13 @@ function ChatInterface({
               timestamp: new Date()
             };
             
+            // Add the follow-up message to the UI
             setMessages(prev => [...prev, followUpMessage]);
+            
+            // Save the follow-up message to the database
+            if (enablePersistence) {
+              await saveMessages([followUpMessage]);
+            }
           }
         } catch (toolError) {
           setError(`Error executing tool: ${toolError}`);
@@ -1315,11 +1722,22 @@ function ChatInterface({
           timestamp: new Date()
         };
         
+        // Add the assistant message to the UI
         setMessages(prev => [...prev, assistantMessage]);
+        
+        // Save the user message and the assistant's response to the database
+        if (enablePersistence) {
+          await saveMessages([newUserMessage, assistantMessage]);
+        }
       }
     } catch (err: any) {
       setError(`Error generating response: ${err.message}`);
       console.error(err);
+      
+      // Still save the user message to the database even if there was an error
+      if (enablePersistence) {
+        await saveMessages([newUserMessage]);
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -1328,6 +1746,13 @@ function ChatInterface({
   // Format the timestamp
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Function to clear chat messages
+  const handleClearChat = () => {
+    // Keep only the system message
+    const systemMessage = messages.find(msg => msg.role === 'system');
+    setMessages(systemMessage ? [systemMessage] : []);
   };
 
   // Render a tool call display
@@ -1362,20 +1787,11 @@ function ChatInterface({
     );
   };
 
-  const handleClearChat = () => {
-    setMessages([{
-      id: '1',
-      role: 'system',
-      content: 'I am an AI assistant that can help you with various tasks using tools.',
-      timestamp: new Date()
-    }]);
-  };
-
   const handleSaveServerConfig = (selectedServers: Record<string, ServerConfig>) => {
     const previousCount = Object.keys(activeServers).length;
     const newCount = Object.keys(selectedServers).length;
     
-    onUpdateServers(selectedServers);
+    setActiveServers(selectedServers);
     
     // Show appropriate notification based on the changes
     if (newCount > previousCount) {
@@ -1440,6 +1856,14 @@ function ChatInterface({
     }
   }, [notification]);
 
+  useEffect(() => {
+    if (enablePersistence) {
+      console.log('Setting showChatList to true when persistence is enabled');
+      // Start with chat list visible if persistence is enabled
+      setShowChatList(true);
+    }
+  }, [enablePersistence]);
+
   return (
     <div className="flex flex-col h-screen max-h-screen bg-white dark:bg-gray-900">
       {/* API Key Alert Dialog (Non-dismissable) */}
@@ -1453,7 +1877,7 @@ function ChatInterface({
       
       {/* Server Configuration Sheet with Tools */}
       <ServerConfigSheet 
-        availableServers={availableServers}
+        availableServers={serverConfigs}
         activeServers={activeServers}
         isOpen={showServerConfigSheet}
         onOpenChange={setShowServerConfigSheet}
@@ -1498,8 +1922,15 @@ function ChatInterface({
         <h1 className="text-xl font-semibold flex items-center gap-2 text-gray-800 dark:text-gray-200">
           <Wand2 className="h-5 w-5" />
           <span>AI Chat with Tool Calling</span>
+          {enablePersistence && (
+            <span className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+              <Database className="h-3 w-3" />
+              DB {isInitialized ? 'Connected' : dbError ? 'Error' : 'Connecting...'}
+            </span>
+          )}
         </h1>
         <div className="flex items-center gap-2">
+          {/* Server status indicator */}
           <div className={`h-3 w-3 rounded-full ${
             apiKey ? 'bg-gray-500' :
             status === 'READY' ? 'bg-green-500' : 
@@ -1513,6 +1944,38 @@ function ChatInterface({
              status === 'INSTALLING_NODE_MODULES' ? 'Installing Modules' :
              'Server Error'}
           </span>
+
+          {/* Show database error if any */}
+          {enablePersistence && dbError && (
+            <span className="text-xs text-red-600 dark:text-red-400">
+              DB Error: {dbError.message}
+            </span>
+          )}
+
+          {enablePersistence && (
+            <Button 
+              variant={showChatList ? "primary" : "secondary"}
+              className="text-xs px-2 py-1 ml-1 flex items-center gap-1" 
+              onPress={() => {
+                console.log('Toggling showChatList', !showChatList);
+                setShowChatList(!showChatList);
+              }}
+            >
+              {showChatList ? 'Hide Chats' : 'Show Chats'}
+            </Button>
+          )}
+
+          {enablePersistence && (
+            <Button 
+              variant="secondary" 
+              className="text-xs px-2 py-1 ml-1 flex items-center gap-1" 
+              onPress={handleNewChat}
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              New Chat
+            </Button>
+          )}
+
           <Button 
             variant="secondary" 
             className="text-xs px-2 py-1 ml-1 flex items-center gap-1" 
@@ -1533,6 +1996,9 @@ function ChatInterface({
               <MenuItem id="servers" onAction={() => setShowServerConfigSheet(true)}>
                 Configure Servers
               </MenuItem>
+              {enablePersistence && (
+                <MenuItem id="new-chat" onAction={handleNewChat}>New Chat</MenuItem>
+              )}
             </Menu>
           </MenuTrigger>
         </div>
@@ -1540,6 +2006,43 @@ function ChatInterface({
 
       {/* Main content area */}
       <div className="flex flex-1 overflow-hidden">
+        {/* Chat List Panel (conditionally rendered) */}
+        {enablePersistence && showChatList && (
+          <div className="w-1/4 border-r border-gray-200 dark:border-gray-800 overflow-hidden">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
+              <h2 className="text-lg font-medium">Chat History</h2>
+              <Button 
+                variant="secondary" 
+                className="text-xs px-2 py-1"
+                onPress={handleNewChat}
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                New
+              </Button>
+            </div>
+            {chatSessions.length > 0 ? (
+              <div className="h-full overflow-auto">
+                <ChatList 
+                  messages={formatChatSessionsForList(chatSessions)} 
+                  onMessageClick={handleSessionSelect}
+                  onMessageDelete={handleDeleteSession}
+                />
+              </div>
+            ) : (
+              <div className="p-4 text-gray-500 text-center">
+                <p>No chat sessions found</p>
+                <Button 
+                  variant="secondary" 
+                  className="mt-2"
+                  onPress={handleNewChat}
+                >
+                  Create New Chat
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Chat messages */}
         <div className="flex-1 flex flex-col w-full">
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -1614,7 +2117,6 @@ function ChatInterface({
                 onChange={setInputValue}
                 aria-label="Type a message"
                 isDisabled={isProcessing || !apiKey}
-                placeholder={!apiKey ? "API key required to use chat" : "Type a message..."}
               />
               <Button
                 type="submit"

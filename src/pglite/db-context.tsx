@@ -5,7 +5,7 @@ import { getDB, initSchema, createDBOperations } from './db-core';
 import { DatabaseContextType, ParseSchema, DBOperations } from './types';
 
 // Create a generic database context
-const DatabaseContext = createContext<DatabaseContextType<any>>({
+export const DatabaseContext = createContext<DatabaseContextType<any>>({
   db: null,
   operations: null,
   isInitialized: false,

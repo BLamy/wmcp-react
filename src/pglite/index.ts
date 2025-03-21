@@ -18,6 +18,9 @@ export {
 // Export the enhanced usePGVectorDB hook
 export { usePGVectorDB } from './use-pg-vector-db';
 
+// Export the database browser component
+export { DatabaseBrowser } from './database-browser';
+
 // Re-export PGlite and vector for convenience
 export { PGlite, vector };
 
@@ -64,5 +67,11 @@ export { PGlite, vector };
     // db.operations.users.create({ name: 'John' })
     
     return <div>Alternative App</div>;
+  }
+
+  // Or use the DatabaseBrowser to explore your database
+  function ExplorerApp() {
+    // You can provide a custom schema and database name
+    return <DatabaseBrowser schema={SCHEMA} dbName="my-explorer-db" />;
   }
 */
