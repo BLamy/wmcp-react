@@ -55,22 +55,3 @@ export const LinearLiteImplementation: StoryObj<typeof LinearLiteApp> = {
   render: () => <LinearLiteApp />,
   decorators: [withDatabaseContext]
 };
-
-// Demo error state
-export const WithDatabaseError: Story = {
-  name: 'With Database Error',
-  render: () => (
-    <div className="error-state" style={{ maxWidth: '800px', margin: '0 auto' }}>
-      <h2>Todo Application</h2>
-      <div className="error-message" style={{ 
-        color: '#e53e3e', 
-        padding: '12px', 
-        border: '1px solid #f5c2c7', 
-        backgroundColor: '#f8d7da', 
-        borderRadius: '4px' 
-      }}>
-        Error: Database connection error
-      </div>
-    </div>
-  )
-};
