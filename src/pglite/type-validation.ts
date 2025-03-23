@@ -5,7 +5,7 @@ import { useTable } from './db-context';
 
 // Test schema
 const TEST_SCHEMA = `
-  CREATE TABLE users (
+  CREATE TABLE IF NOT EXISTS users (
     id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     name TEXT NOT NULL,
     email TEXT UNIQUE
@@ -94,19 +94,19 @@ function typeCheck() {
   const usersTable = useTable<ExpectedSchema, 'users'>('users');
   
   // Type checking
-  const createUser = usersTable.create({ 
+  const createUser = usersTable?.create({ 
     name: 'Jane', 
     email: 'jane@example.com' 
   });
   
   // @ts-expect-error - This should fail due to type mismatch
-  usersTable.create({ name: 123 });
+  usersTable?.create({ name: 123 });
   
   // Test vector search table
   const embeddingsTable = useTable<ExpectedSchema, 'embeddings'>('embeddings');
   
   // Check search method exists
-  const searchResults = embeddingsTable.search?.(
+  const searchResults = embeddingsTable?.search?.(
     Array(384).fill(0),
     0.8,
     10

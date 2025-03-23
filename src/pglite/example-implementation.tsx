@@ -1199,18 +1199,18 @@ type TaskItem = {
 };
 
 // Helper function to parse schema
-function ParseSchema(schemaString: string) {
-  return {} as {
-    todos: TodoItem;
-    projects: ProjectItem;
-    tasks: TaskItem;
-  };
-}
+// function ParseSchema(schemaString: string) {
+//   return {} as {
+//     todos: TodoItem;
+//     projects: ProjectItem;
+//     tasks: TaskItem;
+//   };
+// }
 
-// Schema parse result
-type ParsedSchema = ReturnType<typeof ParseSchema>;
+// // Schema parse result
+// type ParsedSchema = ReturnType<typeof ParseSchema>;
 
-const PARSED_SCHEMA = ParseSchema(SCHEMA);
+// const PARSED_SCHEMA = ParseSchema(SCHEMA);
 
 // TaskEditor component with Lexical implementation - maintained for story compatibility
 export function TaskEditor() {

@@ -175,6 +175,11 @@ export const WithChatSessions: Story = {
         command: 'npx',
         args: ['-y', '@modelcontextprotocol/server-memory'],
         env: {}
+      },
+      filesystem: {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-filesystem', '/'],
+        env: {}
       }
     }
   },

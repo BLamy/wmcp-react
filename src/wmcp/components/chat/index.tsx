@@ -949,7 +949,6 @@ export function Chat({
   const [apiKey, setApiKey] = useState<string>('');
   const [showApiKeyDialog, setShowApiKeyDialog] = useState<boolean>(true);
   const [showServerConfigSheet, setShowServerConfigSheet] = useState<boolean>(false);
-  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
   
   // Chat sessions state
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -1265,11 +1264,6 @@ export function Chat({
         setShowChatList(false);
       }
       
-      // Add notification for user feedback
-      setNotification({
-        message: 'Switched to another chat session',
-        type: 'info'
-      });
     } catch (error) {
       console.error('Error selecting chat session:', error);
       setError(`Error loading chat session: ${error}`);
@@ -1310,11 +1304,7 @@ export function Chat({
       
       // Force show chat list
       setShowChatList(true);
-      
-      setNotification({
-        message: '5 test chat sessions created',
-        type: 'success'
-      });
+
     } catch (error) {
       console.error('Error creating test sessions:', error);
     }
@@ -1341,11 +1331,7 @@ export function Chat({
       
       // Reload sessions (should be empty)
       await loadChatSessions();
-      
-      setNotification({
-        message: 'All chat sessions cleared',
-        type: 'info'
-      });
+
     } catch (error) {
       console.error('Error clearing sessions:', error);
     }
@@ -1376,10 +1362,6 @@ export function Chat({
         }]);
       }
       
-      setNotification({
-        message: 'Chat session deleted',
-        type: 'info'
-      });
     } catch (error) {
       console.error('Error deleting chat session:', error);
       setError(`Error deleting chat session: ${error}`);
@@ -1400,22 +1382,8 @@ export function Chat({
     
     // Close the dialog if we have a key
     if (newApiKey) {
-      setShowApiKeyDialog(false);
-      
-      const encryptedKeyExists = localStorage.getItem('encryptedApiKey') !== null;
-      setNotification({
-        message: encryptedKeyExists 
-          ? 'Unlocked API key successfully.' 
-          : 'API key secured with passkey.',
-        type: 'success'
-      });
-    } else {
-      // If no key, show an error
-      setNotification({
-        message: 'API key is required to use this application.',
-        type: 'error'
-      });
-    }
+      setShowApiKeyDialog(false);     
+    } 
   };
 
   // Handle opening server config sheet from API key dialog
@@ -1429,29 +1397,6 @@ export function Chat({
     const newCount = Object.keys(selectedServers).length;
     
     setActiveServers(selectedServers);
-    
-    // Show appropriate notification based on the changes
-    if (newCount > previousCount) {
-      setNotification({
-        message: `Server configuration updated: ${newCount - previousCount} server(s) added.`,
-        type: 'success'
-      });
-    } else if (newCount < previousCount) {
-      setNotification({
-        message: `Server configuration updated: ${previousCount - newCount} server(s) removed.`,
-        type: 'info'
-      });
-    } else if (JSON.stringify(Object.keys(selectedServers).sort()) !== JSON.stringify(Object.keys(activeServers).sort())) {
-      setNotification({
-        message: 'Server configuration updated: servers changed but count remained the same.',
-        type: 'info'
-      });
-    } else {
-      setNotification({
-        message: 'No changes to server configuration.',
-        type: 'info'
-      });
-    }
   };
 
   // Function to clear chat messages
@@ -1459,11 +1404,7 @@ export function Chat({
     // Keep only the system message
     const systemMessage = messages.find(msg => msg.role === 'system');
     setMessages(systemMessage ? [systemMessage] : []);
-    
-    setNotification({
-      message: 'Chat cleared',
-      type: 'info'
-    });
+  
   };
 
   // Create a new chat session
@@ -1515,11 +1456,6 @@ export function Chat({
       
       console.log(`New chat session created with ID: ${newSessionId}`);
       
-      // Add notification for user feedback
-      setNotification({
-        message: 'New chat session created',
-        type: 'success'
-      });
     } catch (error) {
       console.error('Error creating new chat:', error);
       setError(`Error creating new chat: ${error}`);
@@ -1571,10 +1507,21 @@ export function Chat({
     
     // We require an API key for all operations
     if (!apiKey) {
+      console.error('API key is required but not provided');
       setError("API key is required. Please set your API key.");
       setShowApiKeyDialog(true);
       return;
     }
+    
+    // Basic validation of API key format
+    if (!apiKey.startsWith('sk-') || apiKey.length < 20) {
+      console.error('API key appears to be invalid (should start with sk- and be longer)');
+      setError("API key appears to be in an invalid format. Please check your API key.");
+      setShowApiKeyDialog(true);
+      return;
+    }
+    
+    console.log('API key validation passed, proceeding with message send');
     
     const newUserMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -1645,18 +1592,270 @@ export function Chat({
       }
     }
     
-    // For demo purposes, just return a simple response
-    setTimeout(async () => {
+    try {
+      // Format all previous messages for the API call
+      const formattedMessages = messages.map(msg => {
+        // Skip system messages as we'll add them separately
+        if (msg.role === 'system') return null;
+        
+        // Format the message for Claude API
+        return {
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content
+        };
+      }).filter(Boolean) as {role: 'user' | 'assistant', content: string}[];
+      
+      // Add the new user message
+      formattedMessages.push({
+        role: 'user',
+        content: inputValue
+      });
+      
+      // Set the system message from our system message in the chat
+      const systemMessage = messages.find(msg => msg.role === 'system')?.content || 
+        'I am an AI assistant that can help you with various tasks using tools.';
+      
+      console.log('Calling Anthropic API directly...');
+      
+      // Format the tools properly for Claude API
+      const formattedTools = tools.map(tool => {
+        // Ensure we have a proper schema for the tool
+        let schema = {};
+        
+        // Check various properties where schema might be stored
+        if ('inputSchema' in tool && tool.inputSchema) {
+          schema = tool.inputSchema;
+        } else if ('parameters' in tool && tool.parameters) {
+          schema = tool.parameters;
+        } else if ('input_schema' in tool && tool.input_schema) {
+          schema = tool.input_schema;
+        }
+        
+        return {
+          name: tool.name,
+          description: tool.description || `Tool: ${tool.name}`,
+          input_schema: schema
+        };
+      });
+      
+      console.log('Sending tools to Claude:', formattedTools);
+      
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-3-7-sonnet-20250219',
+          max_tokens: 4000,
+          messages: formattedMessages,
+          system: systemMessage,
+          tools: formattedTools
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error('Claude API error response:', errorData);
+        throw new Error(`Claude API request failed: ${response.status} ${response.statusText} - ${errorData}`);
+      }
+      
+      const data = await response.json();
+      console.log('Claude API response received:', data);
+      
+      // Extract the assistant's response
+      let assistantContent = '';
+      const toolCalls = [];
+      
+      // Handle different response formats
+      if (data && data.content) {
+        console.log('Processing Claude API response with content array:', data.content);
+        // Find text content and tool use
+        for (const contentItem of data.content) {
+          console.log('Processing content item:', contentItem);
+          if (contentItem.type === 'text') {
+            assistantContent = contentItem.text || '';
+            console.log('Found text content:', assistantContent);
+          } else if (contentItem.type === 'tool_use') {
+            const toolCall = {
+              id: contentItem.tool_use?.id || `tool-${Date.now()}`,
+              name: contentItem.tool_use?.name || 'unknown-tool',
+              input: contentItem.tool_use?.input || {}
+            };
+            console.log('Found tool call:', toolCall);
+            toolCalls.push(toolCall);
+          }
+        }
+      } else {
+        // Fallback for unexpected response format
+        console.error('Unexpected Claude API response format:', data);
+        assistantContent = 'Received a response in an unexpected format.';
+      }
+      
+      // Create the assistant message
       const assistantMessage: ChatMessage = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: `I received your message: "${inputValue}".\n\nThis is a demo response since we're focusing on chat history persistence.`,
+        content: assistantContent,
         timestamp: new Date()
       };
       
+      // Add tool calls if any
+      if (toolCalls.length > 0) {
+        const toolCall = toolCalls[0]; // Just handle the first tool call for now
+        assistantMessage.toolCall = {
+          id: toolCall.id,
+          name: toolCall.name,
+          arguments: toolCall.input
+        };
+        
+        // Execute the tool if possible
+        if (executeTool) {
+          try {
+            const toolResult = await executeTool(toolCall.name, toolCall.input);
+            assistantMessage.toolResult = toolResult;
+            
+            // Send the tool result back to Anthropic
+            const toolResultRequestBody = {
+              model: 'claude-3-7-sonnet-20250219',
+              max_tokens: 4000,
+              messages: [
+                ...formattedMessages,
+                { 
+                  role: 'assistant', 
+                  content: [
+                    { type: 'text', text: assistantContent },
+                    { 
+                      type: 'tool_use',
+                      id: toolCall.id,
+                      name: toolCall.name,
+                      input: toolCall.input
+                    }
+                  ]
+                },
+                {
+                  role: 'user',
+                  content: [
+                    {
+                      type: 'tool_result',
+                      tool_use_id: toolCall.id,
+                      content: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult)
+                    }
+                  ]
+                }
+              ],
+              system: systemMessage
+            };
+            
+            console.log('Sending tool result to Anthropic:', toolResultRequestBody);
+            
+            // Send the tool result to Anthropic
+            const toolResultResponse = await fetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true'
+              },
+              body: JSON.stringify(toolResultRequestBody)
+            });
+            
+            if (!toolResultResponse.ok) {
+              const errorData = await toolResultResponse.text();
+              console.error('Claude API tool result error:', errorData);
+              throw new Error(`Anthropic API error (tool result): ${toolResultResponse.status} ${toolResultResponse.statusText}`);
+            }
+            
+            const toolResultData = await toolResultResponse.json();
+            console.log('Tool result response from Anthropic:', toolResultData);
+            
+            // Get the follow-up response text
+            let followUpText = '';
+            if (toolResultData.content) {
+              for (const item of toolResultData.content) {
+                if (item.type === 'text') {
+                  followUpText = item.text;
+                  break;
+                }
+              }
+            }
+            
+            if (followUpText) {
+              const followUpMessage: ChatMessage = {
+                id: Date.now().toString(),
+                role: 'assistant',
+                content: followUpText,
+                timestamp: new Date()
+              };
+              
+              // Add the follow-up message
+              setMessages(prev => [...prev, assistantMessage, followUpMessage]);
+              
+              // Save both messages if persistence enabled
+              if (enablePersistence && db && currentSessionId) {
+                try {
+                  // Save the assistant message
+                  await db.exec(`
+                    INSERT INTO chat_messages (id, role, content, date, session_id, metadata)
+                    VALUES (
+                      '${assistantMessage.id}',
+                      '${assistantMessage.role}',
+                      '${assistantMessage.content.replace(/'/g, "''")}',
+                      CURRENT_TIMESTAMP,
+                      '${currentSessionId}',
+                      '${JSON.stringify({
+                        toolCall: assistantMessage.toolCall,
+                        toolResult: assistantMessage.toolResult
+                      }).replace(/'/g, "''")}'
+                    )
+                  `);
+                  
+                  // Save tool call
+                  if (assistantMessage.toolCall) {
+                    await db.exec(`
+                      INSERT INTO tool_calls (id, message_id, function_name, arguments)
+                      VALUES (
+                        '${assistantMessage.toolCall.id}',
+                        '${assistantMessage.id}',
+                        '${assistantMessage.toolCall.name}',
+                        '${JSON.stringify(assistantMessage.toolCall.arguments).replace(/'/g, "''")}'
+                      )
+                    `);
+                  }
+                  
+                  // Save the follow-up message
+                  await db.exec(`
+                    INSERT INTO chat_messages (id, role, content, date, session_id, metadata)
+                    VALUES (
+                      '${followUpMessage.id}',
+                      '${followUpMessage.role}',
+                      '${followUpMessage.content.replace(/'/g, "''")}',
+                      CURRENT_TIMESTAMP,
+                      '${currentSessionId}',
+                      '{}'
+                    )
+                  `);
+                } catch (error) {
+                  console.error('Error saving assistant messages:', error);
+                }
+              }
+              
+              setIsProcessing(false);
+              return;
+            }
+          } catch (error: any) {
+            console.error(`Error executing tool ${toolCall.name}:`, error);
+            assistantMessage.toolResult = { error: `Failed to execute tool: ${error.message || String(error)}` };
+          }
+        }
+      }
+      
       // Add the assistant message to the UI
       setMessages(prev => [...prev, assistantMessage]);
-      setIsProcessing(false);
       
       // Save assistant message to database if persistence is enabled
       if (enablePersistence && db && currentSessionId) {
@@ -1670,14 +1869,74 @@ export function Chat({
               '${assistantMessage.content.replace(/'/g, "''")}',
               CURRENT_TIMESTAMP,
               '${currentSessionId}',
-              '{}'
+              '${JSON.stringify({
+                toolCall: assistantMessage.toolCall,
+                toolResult: assistantMessage.toolResult
+              }).replace(/'/g, "''")}'
             )
           `);
+          
+          // Save tool call if present
+          if (assistantMessage.toolCall) {
+            await db.exec(`
+              INSERT INTO tool_calls (id, message_id, function_name, arguments)
+              VALUES (
+                '${assistantMessage.toolCall.id || `tool-${Date.now()}`}',
+                '${assistantMessage.id}',
+                '${assistantMessage.toolCall.name}',
+                '${JSON.stringify(assistantMessage.toolCall.arguments).replace(/'/g, "''")}'
+              )
+            `);
+          }
         } catch (error) {
           console.error('Error saving assistant message:', error);
         }
       }
-    }, 1000);
+    } catch (error: any) {
+      console.error('Error generating response:', error);
+      
+      // Extract the most useful error message
+      let errorMessage = 'Error generating response';
+      
+      if (error.message) {
+        // Check if it's a Claude API error with details
+        if (error.message.includes('Claude API request failed')) {
+          // Try to extract the HTTP status and any JSON error details
+          const statusMatch = error.message.match(/(\d{3})/);
+          const statusCode = statusMatch ? statusMatch[1] : 'unknown';
+          
+          if (statusCode === '401') {
+            errorMessage = 'Authentication failed. Your API key may be invalid or expired.';
+          } else if (statusCode === '429') {
+            errorMessage = 'Rate limit exceeded. Please try again in a moment.';
+          } else if (statusCode === '500') {
+            errorMessage = 'Claude API server error. Please try again later.';
+          } else {
+            errorMessage = `Claude API error (${statusCode}): ${error.message.split('-').pop()?.trim() || 'Unknown error'}`;
+          }
+        } else {
+          // For other errors, just use the message
+          errorMessage = error.message;
+        }
+      }
+      
+      // Create an error message
+      const errorResponse: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: errorMessage,
+        timestamp: new Date()
+      };
+      
+      // Add the error message to the UI
+      setMessages(prev => [...prev, errorResponse]);
+      
+      // Show the error in the error sheet
+      setError(errorMessage);
+      setShowErrorSheet(true);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   // Initialize database tables if needed
@@ -1785,29 +2044,6 @@ export function Chat({
         onOpenChange={setShowErrorSheet}
       />
       
-      {/* Notification */}
-      {notification && (
-        <div className="fixed top-4 right-4 z-50 max-w-sm">
-          <ActionCard
-            title={notification.type === 'success' ? 'Success' : 
-                   notification.type === 'error' ? 'Error' : 'Information'}
-            icon={notification.type === 'success' ? <Check className="w-5 h-5" /> : 
-                 notification.type === 'error' ? <AlertCircle className="w-5 h-5" /> : 
-                 <Info className="w-5 h-5" />}
-            className={notification.type === 'success' ? 'bg-green-50 border-green-200 dark:bg-green-900 dark:border-green-700' : 
-                     notification.type === 'error' ? 'bg-red-50 border-red-200 dark:bg-red-900 dark:border-red-700' : 
-                     'bg-blue-50 border-blue-200 dark:bg-blue-900 dark:border-blue-700'}
-            headerBgColor="bg-transparent"
-          >
-            <p className={notification.type === 'success' ? 'text-green-700 dark:text-green-200' : 
-                        notification.type === 'error' ? 'text-red-700 dark:text-red-200' : 
-                        'text-blue-700 dark:text-blue-200'}>
-              {notification.message}
-            </p>
-          </ActionCard>
-        </div>
-      )}
-
       {/* Header */}
       <header className="border-b border-gray-200 dark:border-gray-800 p-4 flex justify-between items-center">
         <h1 className="text-xl font-semibold flex items-center gap-2 text-gray-800 dark:text-gray-200">
