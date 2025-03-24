@@ -4,7 +4,7 @@
     "@babel/preset-react": "^7.26.3",
     "@electric-sql/pglite": "^0.2.17",
     "@playwright/test": "^1.51.1",
-    "@storybook/addon-essentials": "^8.6.7",
+    "@storybook/addon-essentials": "^8.6.8",
     "@storybook/addon-interactions": "^8.6.7",
     "@storybook/addon-links": "^8.6.7",
     "@storybook/addon-onboarding": "^8.6.7",
