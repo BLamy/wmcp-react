@@ -318,8 +318,8 @@ export type DBOperations<Schema> = {
 
 // Database context type
 export interface DatabaseContextType<Schema> {
-  db: PGlite | null;
-  operations: DBOperations<Schema> | null;
+  $raw: PGlite | null;
+  db: DBOperations<Schema> | null;
   isInitialized: boolean;
   error: Error | null;
 }

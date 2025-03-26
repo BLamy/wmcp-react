@@ -16,7 +16,7 @@ import {
   DisclosurePanel 
 } from '@/components/aria/Disclosure';
 import { ActionCard } from '@/wmcp/components/layout/ActionCard';
-import { ChatList } from '@/wmcp/components/chat/ChatList';
+import { ChatList } from './ChatList';
 
 import { Tool } from '@modelcontextprotocol/sdk/types';
 import { ServerConfig } from '../../lib/McpClientManager';
@@ -943,7 +943,7 @@ export function Chat({
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(sessionId);
 
   // Access database context if persistence is enabled
-  const { db, operations, isInitialized, error: dbError } = useContext(DatabaseContext);
+  const { $raw: db, isInitialized, error: dbError } = useContext(DatabaseContext);
   
   // State for API key
   const [apiKey, setApiKey] = useState<string>('');
@@ -1681,9 +1681,9 @@ export function Chat({
             console.log('Found text content:', assistantContent);
           } else if (contentItem.type === 'tool_use') {
             const toolCall = {
-              id: contentItem.tool_use?.id || `tool-${Date.now()}`,
-              name: contentItem.tool_use?.name || 'unknown-tool',
-              input: contentItem.tool_use?.input || {}
+              id: contentItem?.id || `tool-${Date.now()}`,
+              name: contentItem?.name || 'unknown-tool',
+              input: contentItem?.input || {}
             };
             console.log('Found tool call:', toolCall);
             toolCalls.push(toolCall);
@@ -1715,6 +1715,7 @@ export function Chat({
         // Execute the tool if possible
         if (executeTool) {
           try {
+            debugger
             const toolResult = await executeTool(toolCall.name, toolCall.input);
             assistantMessage.toolResult = toolResult;
             

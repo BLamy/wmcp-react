@@ -75,7 +75,7 @@ export function DatabaseBrowser({
 
 // Browser content that uses the database context
 function DatabaseBrowserContent() {
-  const { db, isInitialized, error } = useDatabase();
+  const { $raw, isInitialized, error } = useDatabase();
   const [queryText, setQueryText] = useState<string>('');
   const [queryResults, setQueryResults] = useState<any[] | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
@@ -86,18 +86,18 @@ function DatabaseBrowserContent() {
 
   // Load tables when database is initialized
   useEffect(() => {
-    if (isInitialized && db) {
+    if (isInitialized && $raw) {
       loadTables();
     }
-  }, [isInitialized, db]);
+  }, [isInitialized, $raw]);
 
   // Load tables from the database
   const loadTables = async () => {
-    if (!db) return;
+    if (!$raw) return;
     
     try {
       setIsLoading(true);
-      const result = await db.query(`
+      const result = await $raw.query(`
         SELECT tablename FROM pg_catalog.pg_tables 
         WHERE schemaname = 'public'
         ORDER BY tablename
@@ -120,10 +120,10 @@ function DatabaseBrowserContent() {
 
   // Load column information for a table
   const loadTableColumns = async (tableName: string) => {
-    if (!db) return [];
+    if (!$raw) return [];
     
     try {
-      const result = await db.query(`
+      const result = await $raw.query(`
         SELECT column_name 
         FROM information_schema.columns 
         WHERE table_name = $1
@@ -139,14 +139,14 @@ function DatabaseBrowserContent() {
 
   // Load data from a table
   const loadTableData = async (tableName: string) => {
-    if (!db) return;
+    if (!$raw) return;
     
     try {
       setIsLoading(true);
       setSelectedTable(tableName);
       
       // Then fetch data
-      const result = await db.query(`SELECT * FROM ${tableName} LIMIT 100`);
+      const result = await $raw.query(`SELECT * FROM ${tableName} LIMIT 100`);
       
       // Determine all possible columns from all rows
       if (result.rows.length > 0) {
@@ -178,12 +178,12 @@ function DatabaseBrowserContent() {
 
   // Execute a raw SQL query
   const executeQuery = async () => {
-    if (!db || !queryText.trim()) return;
+    if (!$raw || !queryText.trim()) return;
     
     try {
       setIsLoading(true);
       console.log('Executing query:', queryText);
-      const result = await db.query(queryText);
+      const result = await $raw.query(queryText);
       console.log('Query result:', result);
       
       // Special handling for different types of results

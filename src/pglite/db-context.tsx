@@ -6,8 +6,8 @@ import { DatabaseContextType, ParseSchema, DBOperations } from './types';
 
 // Create a generic database context
 export const DatabaseContext = createContext<DatabaseContextType<any>>({
+  $raw: null,
   db: null,
-  operations: null,
   isInitialized: false,
   error: null,
 });
@@ -26,8 +26,8 @@ export function DatabaseProvider<SQL extends string>({
   dbName = 'postgres-typesafe-db',
   children,
 }: DatabaseProviderProps<SQL>) {
-  const [db, setDb] = useState<PGlite | null>(null);
-  const [operations, setOperations] = useState<DBOperations<ParseSchema<SQL>> | null>(null);
+  const [$raw, setRaw] = useState<PGlite | null>(null);
+  const [db, setDb] = useState<DBOperations<ParseSchema<SQL>> | null>(null);
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -38,7 +38,7 @@ export function DatabaseProvider<SQL extends string>({
         
         // Get or create the database instance
         const database = await getDB(dbName);
-        setDb(database);
+        setRaw(database);
         console.log(`[PGlite] Database created successfully: ${dbName}`);
         
         // Initialize the schema
@@ -46,9 +46,9 @@ export function DatabaseProvider<SQL extends string>({
         console.log(`[PGlite] Schema initialized`);
         
         // Create type-safe operations
-        const dbOps = createDBOperations(database, schema);
-        setOperations(dbOps);
-        
+        const sdk = createDBOperations(database, schema);
+        setDb(sdk);
+        console.log(`[PGlite] Database operations created`, Object.keys(sdk));
         // Mark as initialized
         setIsInitialized(true);
         console.log(`[PGlite] Database initialization complete: ${dbName}`);
@@ -64,8 +64,8 @@ export function DatabaseProvider<SQL extends string>({
   }, [schema, dbName, isInitialized, db]);
 
   const value = {
+    $raw,
     db,
-    operations,
     isInitialized,
     error,
   };
@@ -102,17 +102,17 @@ export function useTable<Schema, TableName extends keyof Schema>(
     throw new Error('useTable must be used within a DatabaseProvider');
   }
   
-  const { operations, isInitialized, error } = context;
+  const { db, isInitialized, error } = context;
   
   if (error) {
     throw error;
   }
   
-  if (!isInitialized || !operations) {
+  if (!isInitialized || !db) {
     return null;
   }
   
-  const tableOperations = operations[tableName as string as keyof typeof operations];
+  const tableOperations = db[tableName as string as keyof typeof db];
   
   if (!tableOperations) {
     return null
