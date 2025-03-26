@@ -7,7 +7,7 @@ import { DatabaseContext, DatabaseProvider } from '../src/pglite/db-context';
 import { vector } from '@electric-sql/pglite/vector';
 
 const meta: Meta<typeof Chat> = {
-  title: 'Components/Chat',
+  title: 'mcp/Chat',
   component: Chat,
   parameters: {
     layout: 'fullscreen',

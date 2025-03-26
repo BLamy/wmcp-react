@@ -157,30 +157,90 @@ async function decryptValue(encryptedValue: string, key: CryptoKey): Promise<str
 /**
  * Identifies all TEXT fields in a table's schema definition
  */
-function getTextFields(schemaSQL: string, tableName: string): string[] {
-  // Find the table definition
-  const tableRegex = new RegExp(`CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?${tableName}\\s*\\(([^)]+)\\)`, 'i');
+export function getTextFields(schemaSQL: string, tableName: string): string[] {
+  // Find the table definition using a regex that can handle complex schemas
+  const tableRegexPattern = `CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?${tableName}\\s*\\(([\\s\\S]*?)\\);`;
+  const tableRegex = new RegExp(tableRegexPattern, 'i');
   const tableMatch = schemaSQL.match(tableRegex);
   
   if (!tableMatch || !tableMatch[1]) {
     return [];
   }
   
-  // Parse column definitions
-  const columnDefinitions = tableMatch[1].split(',');
+  // Get the column definitions as a string
+  const columnDefinitionsStr = tableMatch[1];
+  
+  // Use a proper SQL column parser
+  // This handles nested parentheses and complex definitions correctly
   const textFields: string[] = [];
   
-  // Extract TEXT field names
+  // Split by comma but respect parentheses nesting
+  const columnDefinitions = splitSqlColumns(columnDefinitionsStr);
+  
   for (const columnDef of columnDefinitions) {
     const trimmedDef = columnDef.trim();
+    
     // Match column names followed by TEXT type (case insensitive)
-    const columnMatch = trimmedDef.match(/^([^\s]+)\s+TEXT/i);
+    // But avoid matching within REFERENCES clauses
+    const columnMatch = /^(\w+)\s+TEXT\b/i.exec(trimmedDef);
+    
     if (columnMatch && columnMatch[1]) {
       textFields.push(columnMatch[1].trim());
     }
   }
   
   return textFields;
+}
+
+/**
+ * Helper function to split SQL column definitions while respecting nested parentheses
+ */
+function splitSqlColumns(sqlStr: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let depth = 0;
+  
+  for (let i = 0; i < sqlStr.length; i++) {
+    const char = sqlStr[i];
+    
+    if (char === '(' && !isInQuotes(sqlStr, i)) {
+      depth++;
+      current += char;
+    } else if (char === ')' && !isInQuotes(sqlStr, i)) {
+      depth--;
+      current += char;
+    } else if (char === ',' && depth === 0 && !isInQuotes(sqlStr, i)) {
+      // Only split on commas at the top level
+      result.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  
+  if (current.trim()) {
+    result.push(current);
+  }
+  
+  return result;
+}
+
+/**
+ * Helper to check if a position is inside a quoted string
+ */
+function isInQuotes(str: string, pos: number): boolean {
+  let inSingleQuotes = false;
+  let inDoubleQuotes = false;
+  
+  for (let i = 0; i < pos; i++) {
+    if (str[i] === "'" && (i === 0 || str[i-1] !== '\\')) {
+      inSingleQuotes = !inSingleQuotes;
+    } else if (str[i] === '"' && (i === 0 || str[i-1] !== '\\')) {
+      inDoubleQuotes = !inDoubleQuotes;
+    }
+  }
+  
+  return inSingleQuotes || inDoubleQuotes;
 }
 
 /**
@@ -240,7 +300,7 @@ export function createDBOperations<SQL extends string>(
         
         // Decrypt TEXT fields if in secure mode
         if (encryptionKey && textFields.length > 0) {
-          const decryptedRow = { ...resultRow };
+          const decryptedRow = { ...resultRow } as Record<string, any>;
           for (const field of textFields) {
             if (decryptedRow[field] && typeof decryptedRow[field] === 'string') {
               decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey);
@@ -294,7 +354,7 @@ export function createDBOperations<SQL extends string>(
         // Decrypt TEXT fields in results if in secure mode
         if (encryptionKey && textFields.length > 0) {
           const decryptedRows = await Promise.all(result.rows.map(async (row) => {
-            const decryptedRow = { ...row };
+            const decryptedRow = { ...row } as Record<string, any>;
             for (const field of textFields) {
               if (decryptedRow[field] && typeof decryptedRow[field] === 'string') {
                 decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey!);
@@ -322,7 +382,7 @@ export function createDBOperations<SQL extends string>(
         
         // Decrypt TEXT fields if in secure mode
         if (encryptionKey && textFields.length > 0) {
-          const decryptedRow = { ...result.rows[0] };
+          const decryptedRow = { ...result.rows[0] } as Record<string, any>;
           for (const field of textFields) {
             if (decryptedRow[field] && typeof decryptedRow[field] === 'string') {
               decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey);
@@ -373,7 +433,7 @@ export function createDBOperations<SQL extends string>(
         
         // Decrypt TEXT fields if in secure mode
         if (encryptionKey && textFields.length > 0) {
-          const decryptedRow = { ...result.rows[0] };
+          const decryptedRow = { ...result.rows[0] } as Record<string, any>;
           for (const field of textFields) {
             if (decryptedRow[field] && typeof decryptedRow[field] === 'string') {
               decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey);
@@ -399,7 +459,7 @@ export function createDBOperations<SQL extends string>(
         
         // Decrypt TEXT fields if in secure mode
         if (encryptionKey && textFields.length > 0) {
-          const decryptedRow = { ...result.rows[0] };
+          const decryptedRow = { ...result.rows[0] } as Record<string, any>;
           for (const field of textFields) {
             if (decryptedRow[field] && typeof decryptedRow[field] === 'string') {
               decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey);
@@ -423,7 +483,7 @@ export function createDBOperations<SQL extends string>(
           const allRows = await operations[table].findMany();
           
           // Filter rows where the decrypted field matches the search value
-          return allRows.filter(row => {
+          return allRows.filter((row: Record<string, any>) => {
             const fieldValue = row[fieldName];
             return fieldValue && fieldValue.toLowerCase().includes(searchValue.toLowerCase());
           });
@@ -450,9 +510,9 @@ export function createDBOperations<SQL extends string>(
         const result = await db.query(query, values);
         
         // Decrypt TEXT fields if in secure mode
-          if (encryptionKey && textFields.length > 0) {
+        if (encryptionKey && textFields.length > 0) {
           const decryptedRows = await Promise.all(result.rows.map(async (row) => {
-            const decryptedRow = { ...row };
+            const decryptedRow = { ...row } as Record<string, any>;
             for (const field of textFields) {
               if (decryptedRow[field] && typeof decryptedRow[field] === 'string') {
                 decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey!);
@@ -492,7 +552,7 @@ export function createDBOperations<SQL extends string>(
         // Decrypt TEXT fields if in secure mode
         if (encryptionKey && textFields.length > 0) {
           const decryptedRows = await Promise.all(result.rows.map(async (row) => {
-            const decryptedRow = { ...row };
+            const decryptedRow = { ...row } as Record<string, any>;
             for (const field of textFields) {
               if (decryptedRow[field] && typeof decryptedRow[field] === 'string') {
                 decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey!);

@@ -4,7 +4,7 @@ import { LexicalEditor } from '@/components/lexical/LexicalEditor';
 
 // Define metadata for the stories
 const meta: Meta<typeof LexicalEditor> = {
-  title: 'Components/Lexical Editor',
+  title: 'Editors/Lexical Editor',
   component: LexicalEditor,
   parameters: {
     layout: 'padded',

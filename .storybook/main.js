@@ -12,7 +12,6 @@ const config = {
     "../stories/**/SecureNotesDemo.stories.@(js|jsx|mjs|ts|tsx)",
     "../src/**/*.stories.@(js|jsx|mjs|ts|tsx)",
     "../stories/**/SemanticToolChat.stories.@(js|jsx|mjs|ts|tsx)",
-    "../stories/**/ChatList.stories.@(js|jsx|mjs|ts|tsx)",
     "../src/pglite/**/*.stories.@(js|jsx|mjs|ts|tsx)",
     "../stories/**/Embedding.stories.@(js|jsx|mjs|ts|tsx)"
 

@@ -3,7 +3,7 @@ import { Meta, StoryObj } from '@storybook/react';
 import { SecurePasswordManager } from './SecurePasswordManager';
 
 const meta: Meta<typeof SecurePasswordManager> = {
-  title: 'Components/SecurePasswordManager',
+  title: 'security/SecurePasswordManager',
   component: SecurePasswordManager,
   parameters: {
     layout: 'fullscreen',
