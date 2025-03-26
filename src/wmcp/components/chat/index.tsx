@@ -2161,7 +2161,7 @@ export function Chat({
               <h2 className="text-lg font-medium">Chat History</h2>
               <Button 
                 variant="secondary" 
-                className="text-xs px-2 py-1"
+                className="flex items-center text-xs px-2 py-1"
                 onPress={handleNewChat}
               >
                 <Plus className="h-3 w-3 mr-1" />
