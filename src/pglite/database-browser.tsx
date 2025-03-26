@@ -58,13 +58,17 @@ const SAMPLE_QUERIES = [
 // Main database browser component
 export function DatabaseBrowser({ 
   schema = DEFAULT_SCHEMA,
-  dbName = 'database-browser-db'
+  dbName = 'database-browser-db',
+  secure = false,
+  debug = false
 }: { 
   schema?: string;
   dbName?: string;
+  secure?: boolean;
+  debug?: boolean;
 }) {
   return (
-    <DatabaseProvider schema={schema} dbName={dbName}>
+    <DatabaseProvider schema={schema} dbName={dbName} secure={secure} debug={debug}>
       <div className="database-browser" style={{ padding: '20px' }}>
         <h1 style={{ marginBottom: '20px' }}>Database Browser</h1>
         <DatabaseBrowserContent />

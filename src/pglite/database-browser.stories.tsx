@@ -173,7 +173,8 @@ const meta: Meta<typeof DatabaseBrowser> = {
   },
   args: {
     schema: EXAMPLE_SCHEMA,
-    dbName: 'browser-story-db'
+    dbName: 'browser-story-db',
+    debug: true
   }
 };
 
@@ -210,6 +211,7 @@ export const WithCustomSchema: Story = {
     }
   },
   args: {
+    debug: true,
     schema: `
       CREATE TABLE IF NOT EXISTS products (
         id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,

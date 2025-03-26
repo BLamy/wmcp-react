@@ -145,7 +145,7 @@ const withDatabaseContext = (Story: React.ComponentType) => {
   }
   
   return (
-    <DatabaseProvider schema={CHAT_SCHEMA} dbName="chat-sessions">
+    <DatabaseProvider schema={CHAT_SCHEMA} dbName="chat-sessions" debug={true}>
       <Story />
     </DatabaseProvider>
   );
