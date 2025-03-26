@@ -10,6 +10,7 @@ const config = {
     "../stories/**/MCPToolRouter.stories.@(js|jsx|mjs|ts|tsx)",
     "../stories/**/MCPToolRouterChat.stories.@(js|jsx|mjs|ts|tsx)",
     "../stories/**/SecureNotesDemo.stories.@(js|jsx|mjs|ts|tsx)",
+    "../stories/**/SecureNotesApp.stories.@(js|jsx|mjs|ts|tsx)",
     "../stories/**/SemanticToolChat.stories.@(js|jsx|mjs|ts|tsx)",
     "../stories/**/ChatList.stories.@(js|jsx|mjs|ts|tsx)",
     "../src/pglite/**/*.stories.@(js|jsx|mjs|ts|tsx)",

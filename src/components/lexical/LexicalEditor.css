@@ -22,9 +22,8 @@
   padding: 1rem;
   position: relative;
   resize: none;
-  caret-color: rgb(74 222 128);
+  caret-color: rgb(53, 207, 215);
   display: block;
-  color: #f3f4f6;
 }
 
 .editor-placeholder {
@@ -82,21 +81,18 @@
   font-size: 1.875rem;
   font-weight: 700;
   margin: 1rem 0;
-  color: #f3f4f6;
 }
 
 .editor-heading-h2 {
   font-size: 1.5rem;
   font-weight: 600;
   margin: 0.75rem 0;
-  color: #f3f4f6;
 }
 
 .editor-heading-h3 {
   font-size: 1.25rem;
   font-weight: 600;
   margin: 0.5rem 0;
-  color: #f3f4f6;
 }
 
 /* Quotes */
@@ -152,7 +148,6 @@
 
 .toolbar button:hover {
   background-color: rgb(55, 65, 81);
-  color: #f3f4f6;
 }
 
 .toolbar button.active {
