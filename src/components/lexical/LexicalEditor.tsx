@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useImperativeHandle, forwardRef } from 'react';
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
@@ -15,8 +15,9 @@ import { ListItemNode, ListNode } from '@lexical/list';
 import { CodeHighlightNode, CodeNode } from '@lexical/code';
 import { AutoLinkNode, LinkNode } from '@lexical/link';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
+import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { $getRoot, $createParagraphNode, $createTextNode, EditorState, SerializedEditorState } from 'lexical';
-import ToolbarPlugin from '../../pglite/plugins/ToolbarPlugin';
+import ToolbarPlugin from './plugins/ToolbarPlugin';
 import './LexicalEditor.css';
 
 // Define theme
@@ -34,6 +35,15 @@ const theme = {
     h2: 'editor-heading-h2',
     h3: 'editor-heading-h3',
   },
+  list: {
+    nested: {
+      listitem: 'editor-nested-listitem',
+    },
+    ol: 'editor-list-ol',
+    ul: 'editor-list-ul',
+    listitem: 'editor-listitem',
+  },
+  quote: 'editor-quote',
 };
 
 // Define nodes
@@ -55,6 +65,11 @@ function onError(error: Error) {
   console.error(error);
 }
 
+export interface LexicalEditorRef {
+  setContent: (content: string) => void;
+  clear: () => void;
+}
+
 type LexicalEditorProps = {
   /** Initial content for the editor */
   initialContent?: string;
@@ -68,16 +83,69 @@ type LexicalEditorProps = {
   className?: string;
 };
 
+// Create an UpdatePlugin to handle content updates
+function UpdatePlugin({ editorRef }: { editorRef: React.MutableRefObject<LexicalEditorRef | null> }) {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    if (!editorRef.current) {
+      editorRef.current = {
+        setContent: (content: string) => {
+          editor.update(() => {
+            try {
+              // Try to parse as JSON first
+              const contentObj = typeof content === 'string' ? JSON.parse(content) : content;
+              if (contentObj && typeof contentObj === 'object') {
+                // Set editor state if valid JSON
+                editor.setEditorState(editor.parseEditorState(contentObj));
+                return;
+              }
+            } catch (e) {
+              // If not valid JSON, treat as plain text
+              const root = $getRoot();
+              root.clear();
+              const paragraph = $createParagraphNode();
+              paragraph.append($createTextNode(content));
+              root.append(paragraph);
+            }
+          });
+        },
+        clear: () => {
+          editor.update(() => {
+            const root = $getRoot();
+            root.clear();
+            root.append($createParagraphNode());
+          });
+        },
+      };
+    }
+  }, [editor, editorRef]);
+
+  return null;
+}
+
 /**
  * A rich text editor component using Lexical
  */
-export function LexicalEditor({
+export const LexicalEditor = forwardRef<LexicalEditorRef, LexicalEditorProps>(({
   initialContent = '',
   onChange,
   readOnly = false,
   placeholder = 'Enter some text...',
   className = '',
-}: LexicalEditorProps) {
+}, ref) => {
+  const editorRef = React.useRef<LexicalEditorRef | null>(null);
+
+  // Expose the ref methods
+  useImperativeHandle(ref, () => ({
+    setContent: (content: string) => {
+      editorRef.current?.setContent(content);
+    },
+    clear: () => {
+      editorRef.current?.clear();
+    },
+  }));
+
   const initialConfig = {
     namespace: 'WMCPEditor',
     theme,
@@ -90,7 +158,6 @@ export function LexicalEditor({
   const handleEditorChange = (editorState: EditorState) => {
     editorState.read(() => {
       try {
-        // Serialize the editor state to JSON
         const jsonString = JSON.stringify(editorState.toJSON());
         onChange?.(jsonString);
       } catch (error) {
@@ -104,7 +171,6 @@ export function LexicalEditor({
     if (!initialContent) return null;
     
     try {
-      // Check if it's already a parsed object (for backward compatibility)
       const contentObj = typeof initialContent === 'string'
         ? JSON.parse(initialContent)
         : initialContent;
@@ -114,29 +180,21 @@ export function LexicalEditor({
         return null;
       }
       
-      // Return a function that provides the editor state
       return () => {
-        // Create at least one paragraph node if the content is empty
         const root = $getRoot();
         if (root.getChildrenSize() === 0) {
           root.append($createParagraphNode());
         }
-        
-        // Return the parsed state
         return contentObj;
       };
     } catch (error) {
       console.warn('Failed to parse editor content:', error);
       
-      // If it's not valid JSON, just return the string as plain text content
       return () => {
         const root = $getRoot();
         const paragraph = $createParagraphNode();
-        
-        // Create text node with the content
         const textNode = $createTextNode(initialContent);
         paragraph.append(textNode);
-        
         root.append(paragraph);
       };
     }
@@ -162,11 +220,14 @@ export function LexicalEditor({
             <LinkPlugin />
             <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
             <OnChangePlugin onChange={handleEditorChange} />
+            <UpdatePlugin editorRef={editorRef} />
           </div>
         </div>
       </LexicalComposer>
     </div>
   );
-}
+});
+
+LexicalEditor.displayName = 'LexicalEditor';
 
 export default LexicalEditor; 

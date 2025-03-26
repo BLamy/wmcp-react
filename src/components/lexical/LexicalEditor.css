@@ -1,14 +1,13 @@
 .lexical-editor-container {
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  overflow: hidden;
   position: relative;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  width: 100%;
+  height: 100%;
+  border-radius: 0.5rem;
 }
 
 .editor-inner {
   position: relative;
-  background: white;
+  height: 100%;
 }
 
 .editor-content {
@@ -19,13 +18,13 @@
 }
 
 .editor-input {
+  min-height: 200px;
+  padding: 1rem;
   position: relative;
-  outline: none;
-  padding: 16px;
-  min-height: 150px;
   resize: none;
-  tab-size: 1;
-  caret-color: #1d4ed8;
+  caret-color: rgb(74 222 128);
+  display: block;
+  color: #f3f4f6;
 }
 
 .editor-placeholder {
@@ -33,8 +32,8 @@
   overflow: hidden;
   position: absolute;
   text-overflow: ellipsis;
-  top: 24px;
-  left: 16px;
+  top: 1rem;
+  left: 1rem;
   user-select: none;
   display: inline-block;
   pointer-events: none;
@@ -53,56 +52,161 @@
   text-decoration: underline;
 }
 
+.editor-text-strikethrough {
+  text-decoration: line-through;
+}
+
+.editor-text-underlineStrikethrough {
+  text-decoration: underline line-through;
+}
+
 .editor-text-code {
-  background-color: #f3f4f6;
-  padding: 2px 4px;
+  background-color: rgb(55, 65, 81);
+  padding: 1px 4px;
   border-radius: 4px;
-  font-family: monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.editor-link {
+  color: rgb(74 222 128);
+  text-decoration: underline;
+}
+
+.editor-paragraph {
+  margin: 0;
+  position: relative;
 }
 
 /* Headings */
 .editor-heading-h1 {
-  font-size: 24px;
-  color: #111827;
-  font-weight: 800;
-  margin: 12px 0;
+  font-size: 1.875rem;
+  font-weight: 700;
+  margin: 1rem 0;
+  color: #f3f4f6;
 }
 
 .editor-heading-h2 {
-  font-size: 20px;
-  color: #111827;
-  font-weight: 700;
-  margin: 10px 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0.75rem 0;
+  color: #f3f4f6;
 }
 
 .editor-heading-h3 {
-  font-size: 16px;
-  color: #111827;
+  font-size: 1.25rem;
   font-weight: 600;
-  margin: 8px 0;
+  margin: 0.5rem 0;
+  color: #f3f4f6;
 }
 
 /* Quotes */
-.quote {
-  margin: 8px 0;
-  padding-left: 16px;
-  border-left: 4px solid #e5e7eb;
-  color: #4b5563;
+.editor-quote {
+  margin: 1rem 0;
+  padding-left: 1rem;
+  border-left: 4px solid rgb(74 222 128);
+  color: #9ca3af;
+  font-style: italic;
 }
 
 /* Lists */
-ul, ol {
-  padding: 0;
-  margin: 0;
-  padding-left: 20px;
+.editor-list-ol {
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+  list-style-type: decimal;
 }
 
-ul li, ol li {
-  margin: 8px 16px;
+.editor-list-ul {
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+  list-style-type: disc;
 }
 
-/* Paragraphs */
-.editor-paragraph {
-  margin: 8px 0;
+.editor-listitem {
+  margin: 0.3rem 2rem;
+}
+
+.editor-nested-listitem {
+  list-style-type: none;
+}
+
+/* Toolbar Styles */
+.toolbar {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid rgb(55, 65, 81);
+}
+
+.toolbar button {
+  border: none;
+  background: none;
+  color: #9ca3af;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toolbar button:hover {
+  background-color: rgb(55, 65, 81);
+  color: #f3f4f6;
+}
+
+.toolbar button.active {
+  background-color: rgb(74 222 128);
+  color: rgb(17, 24, 39);
+}
+
+/* For read-only mode */
+[contenteditable="false"] {
+  user-select: text;
+  cursor: default;
+}
+
+[contenteditable="false"] .editor-input {
+  opacity: 0.7;
+}
+
+/* Code Blocks */
+.editor-code {
+  background-color: rgb(55, 65, 81);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  padding: 1rem;
+  margin: 0.5rem 0;
+  border-radius: 0.5rem;
   position: relative;
+}
+
+/* Tables */
+.editor-table {
+  border-collapse: collapse;
+  border-spacing: 0;
+  max-width: 100%;
+  overflow-y: scroll;
+  table-layout: fixed;
+  width: 100%;
+  margin: 0.5rem 0;
+}
+
+.editor-table-cell {
+  border: 1px solid rgb(55, 65, 81);
+  padding: 0.5rem;
+  min-width: 75px;
+  vertical-align: top;
+  text-align: start;
+  position: relative;
+}
+
+.editor-table-cell-header {
+  background-color: rgb(55, 65, 81);
+  text-align: start;
+}
+
+/* Selection styles */
+.editor-input *::selection {
+  background-color: rgba(74, 222, 128, 0.2);
+  color: inherit;
 } 
