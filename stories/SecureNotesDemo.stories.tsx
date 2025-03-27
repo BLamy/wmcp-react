@@ -1,9 +1,18 @@
+import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { SecureNotesDemo } from '../src/components/SecureNotesDemo';
+import { AuthProvider } from '../src/lib/AuthContext';
+
+const withAuthProvider = (Story: React.ComponentType) => (
+  <AuthProvider>
+    <Story />
+  </AuthProvider>
+);
 
 const meta: Meta<typeof SecureNotesDemo> = {
   title: 'Security/SecureNotesDemo',
   component: SecureNotesDemo,
+  decorators: [withAuthProvider],
   parameters: {
     layout: 'fullscreen',
     docs: {

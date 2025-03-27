@@ -1,10 +1,9 @@
-// db-context.tsx - React context and provider for database
+// src/pglite/db-context.tsx - MODIFICATION v2
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { PGlite } from '@electric-sql/pglite';
-import { getDB, initSchema, createDBOperations, getEncryptionKey } from './db-core';
+import { getDB, initSchema, createDBOperations } from './db-core';
 import { DatabaseContextType, ParseSchema, DBOperations } from './types';
 
-// Create a generic database context
 export const DatabaseContext = createContext<DatabaseContextType<any>>({
   $raw: null,
   db: null,
@@ -15,18 +14,19 @@ export const DatabaseContext = createContext<DatabaseContextType<any>>({
 interface DatabaseProviderProps<SQL extends string> {
   schema: SQL;
   dbName?: string;
-  secure?: boolean;
+  encryptionKey?: CryptoKey | null; // Keep encryptionKey prop
   debug?: boolean;
   children: ReactNode;
 }
 
 /**
  * Database provider component
+ * Encryption is automatically enabled if a non-null encryptionKey is provided.
  */
 export function DatabaseProvider<SQL extends string>({
   schema,
   dbName = 'postgres-typesafe-db',
-  secure = false,
+  encryptionKey = null, // Default to null
   debug = false,
   children,
 }: DatabaseProviderProps<SQL>) {
@@ -35,58 +35,87 @@ export function DatabaseProvider<SQL extends string>({
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
 
+
   useEffect(() => {
+    // Flag to prevent setup if component unmounts quickly
+    let isMounted = true;
+
     const setupDatabase = async () => {
+      // Determine if secure operations are intended for this render
+      const isSecure = !!encryptionKey;
+
       try {
-        console.log(`[PGlite] Setting up database: ${dbName}`);
+        if (debug) console.log(`[PGlite ${dbName}] Setting up database. Encryption ${isSecure ? 'ENABLED' : 'DISABLED'}.`);
 
-        // Get or create the database instance
+        // Get DB instance (this is fast if already initialized)
         const database = await getDB(dbName);
+        if (!isMounted) return; // Check if unmounted
         setRaw(database);
-        console.log(`[PGlite] Database created successfully: ${dbName}`);
+        if (debug) console.log(`[PGlite ${dbName}] Database instance obtained.`);
 
-        // Initialize the schema
+        // Initialize schema (idempotent)
         await initSchema(database, schema);
-        console.log(`[PGlite] Schema initialized`);
-        // Get encryption key if secure mode is enabled
-        let cryptoKey: CryptoKey | null = null;
-        if (secure) {
-          try {
-            cryptoKey = await getEncryptionKey();
-            if (debug) console.log('Encryption initialized for secure database operations');
-          } catch (error) {
-            console.error('Failed to initialize encryption key:', error);
-            throw new Error('Could not initialize secure mode: encryption key setup failed');
-          }
-        }
-        // Create type-safe operations
-        const sdk = createDBOperations(database, schema, cryptoKey, debug);
+        if (!isMounted) return; // Check if unmounted
+        if (debug) console.log(`[PGlite ${dbName}] Schema initialized.`);
+
+        // Create operations, passing the key (which might be null)
+        // createDBOperations will handle null key internally
+        const sdk = createDBOperations(database, schema, encryptionKey, debug);
+        if (!isMounted) return; // Check if unmounted
         setDb(sdk);
-        console.log(`[PGlite] Database operations created`, Object.keys(sdk));
+        if (debug) console.log(`[PGlite ${dbName}] Database operations created.`);
+
         // Mark as initialized
         setIsInitialized(true);
-        console.log(`[PGlite] Database initialization complete: ${dbName}`);
+        setError(null); // Clear previous errors on successful init
+        if (debug) console.log(`[PGlite ${dbName}] Database initialization complete.`);
+
       } catch (err) {
-        console.error(`[PGlite] Failed to initialize database ${dbName}:`, err);
+        if (!isMounted) return; // Check if unmounted
+        console.error(`[PGlite ${dbName}] Failed to initialize database:`, err);
         setError(err instanceof Error ? err : new Error(String(err)));
+        setIsInitialized(false); // Ensure state reflects error
+        setDb(null); // Clear operations on error
       }
     };
 
-    if (!isInitialized && !db) {
-      setupDatabase();
-    }
-  }, [schema, dbName, isInitialized, db]);
+    // Reset state when key/schema/name changes before re-initializing
+    // This ensures components don't use stale 'db' operations
+    setIsInitialized(false);
+    setDb(null);
+    setError(null);
+    setRaw(null); // Also reset raw instance if config changes
+
+    // Run setup
+    setupDatabase();
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+      if (debug) console.log(`[PGlite ${dbName}] Provider unmounting or dependencies changed.`);
+      // Note: We don't close the PGlite instance here as it's shared via getDB
+    };
+
+  // Re-run effect if schema, dbName, or the encryptionKey itself changes.
+  // `debug` is unlikely to change but included for completeness.
+  }, [schema, dbName, encryptionKey, debug]); // Dependency on encryptionKey handles login/logout
 
   const value = {
-    $raw: {
+    // Provide the raw PGlite instance, potentially wrapped for debugging
+    $raw: $raw ? {
       ...$raw,
       query: async (query: string, params?: any[]) => {
-        if (debug) console.log('Query:', query, params);
-        const result = await $raw!.query(query, params);
-        if (debug) console.log('Result:', result);
-        return result;
+        if (debug) console.log(`[PGlite Query - ${dbName}]`, query, params);
+        try {
+            const result = await $raw!.query(query, params);
+            if (debug) console.log(`[PGlite Result - ${dbName}]`, result);
+            return result;
+        } catch(e) {
+             console.error(`[PGlite Error - ${dbName}] Query: ${query}`, e);
+             throw e;
+        }
       }
-    },
+    } : null,
     db,
     isInitialized,
     error,

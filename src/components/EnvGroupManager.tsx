@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { KeyRound, Shield, Eye, EyeOff, Plus, Trash2, ExternalLink, Copy, Check, Settings, ShieldCheck, Edit } from 'lucide-react';
-import { startRegistration, startAuthentication, WebAuthnError } from '../lib/webauthn';
 import { DatabaseProvider, useDatabase } from '../pglite/db-context';
 import { ParseSchema } from '@/pglite';
+import { useAuth } from '@/lib/AuthContext';
 
 // Define the schema for our env group manager
 const ENV_GROUP_MANAGER_SCHEMA = `
@@ -44,7 +44,7 @@ interface EnvVariable {
 
 // Props for the component
 export interface EnvGroupManagerProps {
-  initialEmail?: string;
+  className?: string;
 }
 
 // Environment variable form component
@@ -706,36 +706,10 @@ const EnvGroupManagerContent = () => {
 };
 
 // Main component
-export function EnvGroupManager({ initialEmail = '' }: EnvGroupManagerProps) {
-  const [email, setEmail] = useState(initialEmail);
-  const [status, setStatus] = useState<'initial' | 'registered' | 'authenticated'>('initial');
-  const [error, setError] = useState<string | null>(null);
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      setError(null);
-      const credential = await startRegistration(email);
-      console.log('Registration successful:', credential);
-      setStatus('registered');
-    } catch (err) {
-      setError(err instanceof WebAuthnError ? err.message : 'Registration failed');
-    }
-  };
-
-  const handleAuthenticate = async () => {
-    try {
-      setError(null);
-      const assertion = await startAuthentication();
-      console.log('Authentication successful:', assertion);
-      setStatus('authenticated');
-    } catch (err) {
-      setError(err instanceof WebAuthnError ? err.message : 'Authentication failed');
-    }
-  };
-
+export function EnvGroupManager({ className }: EnvGroupManagerProps) {
+  const { encryptionKey } = useAuth();
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+    <div className={`min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white ${className || ''}`}>
       <div className="container mx-auto px-4 py-8">
         <div className="text-center mb-8">
           <Shield className="w-12 h-12 mx-auto mb-4 text-emerald-400" />
@@ -743,90 +717,18 @@ export function EnvGroupManager({ initialEmail = '' }: EnvGroupManagerProps) {
           <p className="text-gray-400">Manage your environment variables safely</p>
         </div>
 
-        {status === 'initial' && (
-          <div className="grid md:grid-cols-2 gap-8">
-            {/* Register */}
-            <div className="bg-gray-800 rounded-lg p-6">
-              <h2 className="text-xl font-semibold mb-4">Register New Passkey</h2>
-              <form onSubmit={handleRegister} className="space-y-6">
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium mb-2">
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    id="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-white"
-                    placeholder="Enter your email"
-                    required
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  <KeyRound className="w-5 h-5" />
-                  Register with Passkey
-                </button>
-              </form>
-            </div>
-
-            {/* Login */}
-            <div className="bg-gray-800 rounded-lg p-6">
-              <h2 className="text-xl font-semibold mb-4">Login with Passkey</h2>
-              <p className="text-gray-400 mb-6">
-                Already have a passkey? Login directly without registration.
-              </p>
-              <button
-                onClick={handleAuthenticate}
-                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-              >
-                <KeyRound className="w-5 h-5" />
-                Login with Passkey
-              </button>
-            </div>
+        <div className="w-full mx-auto">
+          <div className="bg-gray-800 rounded-lg p-6 mb-4">
+            <DatabaseProvider 
+              schema={ENV_GROUP_MANAGER_SCHEMA} 
+              dbName="env-group-manager"
+              encryptionKey={encryptionKey} // Enable encryption for TEXT fields
+              debug={false}
+            >
+              <EnvGroupManagerContent />
+            </DatabaseProvider>
           </div>
-        )}
-
-        {status === 'registered' && (
-          <div className="max-w-md mx-auto">
-            <div className="bg-gray-800 rounded-lg p-6 text-center">
-              <ShieldCheck className="w-12 h-12 mx-auto mb-4 text-emerald-400" />
-              <h2 className="text-xl font-semibold mb-2">Registration Successful!</h2>
-              <p className="text-gray-400 mb-4">Your passkey has been created.</p>
-              <button
-                onClick={handleAuthenticate}
-                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-              >
-                <KeyRound className="w-5 h-5" />
-                Continue to Login
-              </button>
-            </div>
-          </div>
-        )}
-
-        {status === 'authenticated' && (
-          <div className="w-full mx-auto">
-            <div className="bg-gray-800 rounded-lg p-6 mb-4">
-              <DatabaseProvider 
-                schema={ENV_GROUP_MANAGER_SCHEMA} 
-                dbName="env-group-manager"
-                secure={true} // Enable encryption for TEXT fields
-                debug={false}
-              >
-                <EnvGroupManagerContent />
-              </DatabaseProvider>
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <div className="mt-6 bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded-lg">
-            {error}
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );

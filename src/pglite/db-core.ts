@@ -87,7 +87,6 @@ export async function getEncryptionKey(): Promise<CryptoKey> {
   try {
     // Export the key for storage
     const exportedKey = await window.crypto.subtle.exportKey('jwk', newKey);
-    localStorage.setItem('db_encryption_key', JSON.stringify(exportedKey));
   } catch (error) {
     console.error('Failed to store encryption key:', error);
   }
@@ -248,325 +247,221 @@ function isInQuotes(str: string, pos: number): boolean {
  * for TEXT fields when secure=true
  */
 export function createDBOperations<SQL extends string>(
-  db: PGlite, 
+  db: PGlite,
   schemaSQL: SQL,
-  encryptionKey: CryptoKey | null = null,
+  encryptionKey: CryptoKey | null, // Key is nullable
   debug: boolean = false
 ): DBOperations<ParseSchema<SQL>> {
-  // We'll build an operations object dynamically
   const operations: Record<string, any> = {};
 
-  // Parse table names from schema (runtime parsing, not type-level)
   const tableMatches = [...schemaSQL.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)/gi)];
-  
+
   for (const [, tableName] of tableMatches) {
     const table = tableName.trim();
-    
-    // Identify TEXT fields for this table if in secure mode
-    const textFields = encryptionKey ? getTextFields(schemaSQL, table) : [];
-    
-    if (debug && encryptionKey) {
-      console.log(`Table ${table} has encrypted TEXT fields:`, textFields);
-    }
-    
+
+    // Determine if encryption should be used for this table's operations
+    const useEncryption = !!encryptionKey; // Base check on key presence
+    const textFields = useEncryption ? getTextFields(schemaSQL, table) : [];
+
+    // Optional: Log if encryption is active for this table's operations
+    // if (debug && useEncryption && textFields.length > 0) {
+    //   console.log(`[DB Core - ${table}] Encryption ENABLED for fields:`, textFields);
+    // } else if (debug) {
+    //    console.log(`[DB Core - ${table}] Encryption DISABLED.`);
+    // }
+
     operations[table] = {
-      // Create operation with encryption support
+      // --- create operation ---
       create: async (data: Record<string, any>) => {
-        // Make a copy to avoid modifying the original data
         const processedData = { ...data };
-        
-        // Encrypt TEXT fields if in secure mode
-        if (encryptionKey && textFields.length > 0) {
+        if (useEncryption && textFields.length > 0) {
           for (const field of textFields) {
             if (processedData[field] && typeof processedData[field] === 'string') {
-              processedData[field] = await encryptValue(processedData[field], encryptionKey);
-              if (debug) console.log(`Encrypted field ${field} for ${table}`);
+              processedData[field] = await encryptValue(processedData[field], encryptionKey!);
             }
           }
         }
-        
+        // ... (rest of create logic - insert query) ...
         const keys = Object.keys(processedData);
         const values = Object.values(processedData);
         const placeholders = keys.map((_, i) => `$${i + 1}`);
-        
-        const query = `
-          INSERT INTO ${table} (${keys.join(', ')})
-          VALUES (${placeholders.join(', ')})
-          RETURNING *
-        `;
-        
+        const query = `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
         const result = await db.query(query, values);
         const resultRow = result.rows[0];
-        
-        // Decrypt TEXT fields if in secure mode
-        if (encryptionKey && textFields.length > 0) {
+
+        // Decrypt response
+        if (useEncryption && textFields.length > 0) {
           const decryptedRow = { ...resultRow } as Record<string, any>;
           for (const field of textFields) {
             if (decryptedRow[field] && typeof decryptedRow[field] === 'string') {
-              decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey);
-              if (debug) console.log(`Decrypted field ${field} for ${table}`);
+              try {
+                decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey!);
+              } catch (e) { decryptedRow[field] = '[DECRYPTION FAILED]'; }
             }
           }
           return decryptedRow;
         }
-        
         return resultRow;
       },
-      
-      // Find many operation with decryption support
+
+      // --- findMany operation ---
       findMany: async (params?: Record<string, any>) => {
         let query = `SELECT * FROM ${table}`;
         const values: any[] = [];
-        
-        if (params?.where) {
-          // Note: When querying with encrypted fields, only unencrypted fields 
-          // or exact match on encrypted fields are reliable
-          const whereConditions = Object.entries(params.where).map(([key, value], index) => {
-            // For encrypted fields, we'd ideally encrypt the value here, but that
-            // would make queries much more complex (need to handle IV consistently)
-            // For simplicity, we'll just use the raw value in where clauses
-            values.push(value);
-            return `${key} = $${index + 1}`;
-          });
-          
-          if (whereConditions.length > 0) {
-            query += ` WHERE ${whereConditions.join(' AND ')}`;
-          }
-        }
-        
-        if (params?.orderBy) {
-          const orderClauses = Object.entries(params.orderBy).map(([key, dir]) => `${key} ${dir}`);
-          query += ` ORDER BY ${orderClauses.join(', ')}`;
-        }
-        
-        if (params?.limit) {
-          values.push(params.limit);
-          query += ` LIMIT $${values.length}`;
-        }
-        
-        if (params?.offset) {
-          values.push(params.offset);
-          query += ` OFFSET $${values.length}`;
-        }
-        
+         if (params?.where) {
+           const whereConditions = Object.entries(params.where).map(([key, value], index) => {
+             if (useEncryption && textFields.includes(key)) {
+                console.warn(`[DB Core] Querying encrypted field '${key}' in WHERE clause is not supported reliably.`);
+                return null;
+             }
+             values.push(value);
+             return `${key} = $${index + 1}`;
+           }).filter(Boolean);
+           if (whereConditions.length > 0) {
+             query += ` WHERE ${whereConditions.join(' AND ')}`;
+           }
+         }
+         if (params?.orderBy) {
+           const orderClauses = Object.entries(params.orderBy).map(([key, dir]) => `${key} ${dir}`);
+           query += ` ORDER BY ${orderClauses.join(', ')}`;
+         }
+         if (params?.limit) {
+           values.push(params.limit);
+           query += ` LIMIT $${values.length}`;
+         }
+         if (params?.offset) {
+           values.push(params.offset);
+           query += ` OFFSET $${values.length}`;
+         }
         const result = await db.query(query, values);
-        
-        // Decrypt TEXT fields in results if in secure mode
-        if (encryptionKey && textFields.length > 0) {
-          const decryptedRows = await Promise.all(result.rows.map(async (row) => {
+        if (useEncryption && textFields.length > 0) {
+          return Promise.all(result.rows.map(async (row) => {
             const decryptedRow = { ...row } as Record<string, any>;
             for (const field of textFields) {
               if (decryptedRow[field] && typeof decryptedRow[field] === 'string') {
-                decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey!);
-                if (debug) console.log(`Decrypted field ${field} for ${table}`);
+                 try { decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey!); }
+                 catch (e) { decryptedRow[field] = '[DECRYPTION FAILED]'; }
               }
             }
             return decryptedRow;
           }));
-          return decryptedRows;
         }
-        
         return result.rows;
       },
-      
-      // Find unique operation with decryption support
-      findUnique: async (where: { id: number }) => {
-        const result = await db.query(
-          `SELECT * FROM ${table} WHERE id = $1 LIMIT 1`,
-          [where.id]
-        );
-        
-        if (result.rows.length === 0) {
-          return null;
-        }
-        
-        // Decrypt TEXT fields if in secure mode
-        if (encryptionKey && textFields.length > 0) {
-          const decryptedRow = { ...result.rows[0] } as Record<string, any>;
-          for (const field of textFields) {
-            if (decryptedRow[field] && typeof decryptedRow[field] === 'string') {
-              decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey);
-              if (debug) console.log(`Decrypted field ${field} for ${table}`);
-            }
-          }
-          return decryptedRow;
-        }
-        
-        return result.rows[0];
-      },
-      
-      // Update operation with encryption support
+       // --- findUnique operation ---
+       findUnique: async (where: { id: number }) => {
+         const result = await db.query(`SELECT * FROM ${table} WHERE id = $1 LIMIT 1`, [where.id]);
+         if (result.rows.length === 0) return null;
+         const row = result.rows[0];
+         if (useEncryption && textFields.length > 0) {
+           const decryptedRow = { ...row } as Record<string, any>;
+           for (const field of textFields) {
+             if (decryptedRow[field] && typeof decryptedRow[field] === 'string') {
+                try { decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey!); }
+                catch (e) { decryptedRow[field] = '[DECRYPTION FAILED]'; }
+             }
+           }
+           return decryptedRow;
+         }
+         return row;
+       },
+      // --- update operation ---
       update: async (params: { where: { id: number }, data: Record<string, any> }) => {
         const { where, data } = params;
-        
-        // Make a copy to avoid modifying the original data
         const processedData = { ...data };
-        
-        // Encrypt TEXT fields if in secure mode
-        if (encryptionKey && textFields.length > 0) {
+        if (useEncryption && textFields.length > 0) {
           for (const field of textFields) {
             if (processedData[field] !== undefined && typeof processedData[field] === 'string') {
-              processedData[field] = await encryptValue(processedData[field], encryptionKey);
-              if (debug) console.log(`Encrypted field ${field} for ${table} update`);
+              processedData[field] = await encryptValue(processedData[field], encryptionKey!);
             }
           }
         }
-        
         const keys = Object.keys(processedData);
         const values = Object.values(processedData);
-        
-        // No updates to make
-        if (keys.length === 0) {
-          return (await operations[table].findUnique(where)) as any;
-        }
-        
+        if (keys.length === 0) return (await operations[table].findUnique(where)) as any;
         const setClause = keys.map((key, i) => `${key} = $${i + 1}`).join(', ');
-        
-        const query = `
-          UPDATE ${table}
-          SET ${setClause}
-          WHERE id = $${values.length + 1}
-          RETURNING *
-        `;
-        
+        const query = `UPDATE ${table} SET ${setClause} WHERE id = $${values.length + 1} RETURNING *`;
         const result = await db.query(query, [...values, where.id]);
-        
-        // Decrypt TEXT fields if in secure mode
-        if (encryptionKey && textFields.length > 0) {
-          const decryptedRow = { ...result.rows[0] } as Record<string, any>;
-          for (const field of textFields) {
-            if (decryptedRow[field] && typeof decryptedRow[field] === 'string') {
-              decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey);
-              if (debug) console.log(`Decrypted field ${field} for ${table}`);
-            }
-          }
-          return decryptedRow;
-        }
-        
-        return result.rows[0];
+        const resultRow = result.rows[0];
+         if (useEncryption && textFields.length > 0) {
+           const decryptedRow = { ...resultRow } as Record<string, any>;
+           for (const field of textFields) {
+             if (decryptedRow[field] && typeof decryptedRow[field] === 'string') {
+                try { decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey!); }
+                catch (e) { decryptedRow[field] = '[DECRYPTION FAILED]'; }
+             }
+           }
+           return decryptedRow;
+         }
+        return resultRow;
       },
-      
-      // Delete operation with decryption support for returned row
+      // --- delete operation ---
       delete: async (where: { id: number }) => {
-        const result = await db.query(
-          `DELETE FROM ${table} WHERE id = $1 RETURNING *`,
-          [where.id]
-        );
-        
-        if (result.rows.length === 0) {
-          return null;
-        }
-        
-        // Decrypt TEXT fields if in secure mode
-        if (encryptionKey && textFields.length > 0) {
-          const decryptedRow = { ...result.rows[0] } as Record<string, any>;
-          for (const field of textFields) {
-            if (decryptedRow[field] && typeof decryptedRow[field] === 'string') {
-              decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey);
-              if (debug) console.log(`Decrypted field ${field} for ${table}`);
-            }
-          }
-          return decryptedRow;
-        }
-        
-        return result.rows[0];
+        const result = await db.query(`DELETE FROM ${table} WHERE id = $1 RETURNING *`, [where.id]);
+        if (result.rows.length === 0) return null;
+        const row = result.rows[0];
+         if (useEncryption && textFields.length > 0) {
+           const decryptedRow = { ...row } as Record<string, any>;
+           for (const field of textFields) {
+             if (decryptedRow[field] && typeof decryptedRow[field] === 'string') {
+                try { decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey!); }
+                catch (e) { decryptedRow[field] = '[DECRYPTION FAILED]'; }
+             }
+           }
+           return decryptedRow;
+         }
+        return row;
       },
-      
-      // Utility for client-side filtering of encrypted data
-      searchDecrypted: encryptionKey && textFields.length > 0 ? 
-        async (fieldName: string, searchValue: string): Promise<any[]> => {
-          if (!textFields.includes(fieldName)) {
-            throw new Error(`Field ${fieldName} is not an encrypted TEXT field in table ${table}`);
+        // --- deleteMany operation ---
+        deleteMany: async (params?: Record<string, any>) => {
+          let query = `DELETE FROM ${table}`;
+          const values: any[] = [];
+          if (params?.where) {
+            const whereConditions = Object.entries(params.where).map(([key, value], index) => {
+               if (useEncryption && textFields.includes(key)) return null; // Skip encrypted fields in WHERE
+              values.push(value);
+              return `${key} = $${index + 1}`;
+            }).filter(Boolean);
+            if (whereConditions.length > 0) query += ` WHERE ${whereConditions.join(' AND ')}`;
           }
-          
-          // Get all rows and decrypt them
-          const allRows = await operations[table].findMany();
-          
-          // Filter rows where the decrypted field matches the search value
-          return allRows.filter((row: Record<string, any>) => {
-            const fieldValue = row[fieldName];
-            return fieldValue && fieldValue.toLowerCase().includes(searchValue.toLowerCase());
-          });
-        } : undefined,
-      
-      // Delete many with a where clause
-      deleteMany: async (params?: Record<string, any>) => {
-        let query = `DELETE FROM ${table}`;
-        const values: any[] = [];
-        
-        if (params?.where) {
-          const whereConditions = Object.entries(params.where).map(([key, value], index) => {
-            values.push(value);
-            return `${key} = $${index + 1}`;
-          });
-          
-          if (whereConditions.length > 0) {
-            query += ` WHERE ${whereConditions.join(' AND ')}`;
-          }
-        }
-        
-        query += ' RETURNING *';
-        
-        const result = await db.query(query, values);
-        
-        // Decrypt TEXT fields if in secure mode
-        if (encryptionKey && textFields.length > 0) {
-          const decryptedRows = await Promise.all(result.rows.map(async (row) => {
-            const decryptedRow = { ...row } as Record<string, any>;
-            for (const field of textFields) {
-              if (decryptedRow[field] && typeof decryptedRow[field] === 'string') {
-                decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey!);
+          query += ' RETURNING *';
+          const result = await db.query(query, values);
+          if (useEncryption && textFields.length > 0) {
+            return Promise.all(result.rows.map(async (row) => {
+              const decryptedRow = { ...row } as Record<string, any>;
+              for (const field of textFields) {
+                if (decryptedRow[field] && typeof decryptedRow[field] === 'string') {
+                  try { decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey!); }
+                  catch(e) { decryptedRow[field] = '[DECRYPTION FAILED]'; }
+                }
               }
-            }
-            return decryptedRow;
-          }));
-          return decryptedRows;
-        }
-        
-        return result.rows;
-      }
+              return decryptedRow;
+            }));
+          }
+          return result.rows;
+        },
+        // --- search operation (if applicable) ---
+       search: operations[table]?.search ? async ( embedding: number[], match_threshold = 0.8, limit = 3) => {
+         const result = await db.query(
+           `SELECT *, embedding <#> $1 AS similarity FROM ${table} WHERE embedding <#> $1 < $2 ORDER BY embedding <#> $1 LIMIT $3`,
+           [JSON.stringify(embedding), -Number(match_threshold), Number(limit)]
+         );
+         if (useEncryption && textFields.length > 0) {
+            return Promise.all(result.rows.map(async (row) => {
+             const decryptedRow = { ...row } as Record<string, any>;
+             for (const field of textFields) {
+               if (decryptedRow[field] && typeof decryptedRow[field] === 'string') {
+                  try { decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey!); }
+                  catch(e) { decryptedRow[field] = '[DECRYPTION FAILED]'; }
+               }
+             }
+             return decryptedRow;
+           }));
+         }
+         return result.rows;
+       } : undefined, // End of search definition
     };
-    
-    // Add vector search method if table has an 'embedding' column
-    // This is a heuristic - we check the schema string for embedding column in this table
-    const tableRegex = new RegExp(`CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?${table}\\s*\\(([^)]+)\\)`, 'i');
-    const tableMatch = schemaSQL.match(tableRegex);
-    
-    if (tableMatch && tableMatch[1] && tableMatch[1].toLowerCase().includes('embedding') && 
-        tableMatch[1].toLowerCase().includes('vector')) {
-      operations[table].search = async (
-        embedding: number[],
-        match_threshold = 0.8,
-        limit = 3
-      ) => {
-        const result = await db.query(
-          `
-          SELECT * FROM ${table}
-          WHERE embedding <#> $1 < $2
-          ORDER BY embedding <#> $1
-          LIMIT $3
-          `,
-          [JSON.stringify(embedding), -Number(match_threshold), Number(limit)]
-        );
-        
-        // Decrypt TEXT fields if in secure mode
-        if (encryptionKey && textFields.length > 0) {
-          const decryptedRows = await Promise.all(result.rows.map(async (row) => {
-            const decryptedRow = { ...row } as Record<string, any>;
-            for (const field of textFields) {
-              if (decryptedRow[field] && typeof decryptedRow[field] === 'string') {
-                decryptedRow[field] = await decryptValue(decryptedRow[field], encryptionKey!);
-              }
-            }
-            return decryptedRow;
-          }));
-          return decryptedRows;
-        }
-        
-        return result.rows;
-      };
-    }
   }
-  
+
   return operations as DBOperations<ParseSchema<SQL>>;
 }

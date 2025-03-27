@@ -113,7 +113,7 @@ function EmbeddingDemo() {
 
 
 export default {
-  title: 'Embedding/Local',
+  title: 'onnx/Embedding',
   component: EmbeddingDemo,
   parameters: {
     layout: 'fullscreen',

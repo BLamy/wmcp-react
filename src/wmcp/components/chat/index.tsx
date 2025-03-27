@@ -111,7 +111,7 @@ interface ServerConfigSheetProps {
   serverToolMapping?: Record<string, string>;
 }
 
-function ServerConfigSheet({ 
+export function ServerConfigSheet({ 
   availableServers, 
   activeServers, 
   isOpen, 

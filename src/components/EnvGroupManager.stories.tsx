@@ -1,10 +1,17 @@
 import React from 'react';
 import { Meta, StoryObj } from '@storybook/react';
 import { EnvGroupManager } from './EnvGroupManager';
-
+import { AuthProvider } from '@/lib/AuthContext';
 const meta: Meta<typeof EnvGroupManager> = {
   title: 'security/EnvGroupManager',
   component: EnvGroupManager,
+  decorators: [
+    (Story) => (
+      <AuthProvider>
+        <Story />
+      </AuthProvider>
+    )
+  ],
   parameters: {
     layout: 'fullscreen',
     docs: {
