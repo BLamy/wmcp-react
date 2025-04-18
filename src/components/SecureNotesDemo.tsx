@@ -1,9 +1,8 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { KeyRound, Shield, ShieldCheck, AlertCircle } from 'lucide-react';
-import { startRegistration, startAuthentication, WebAuthnError } from '../lib/webauthn';
-import { deriveKey, encryptData, decryptData } from '../lib/utils';
+import { Shield, AlertCircle } from 'lucide-react';
+import { encryptData, decryptData } from '../webauthn';
 import { LexicalEditor, LexicalEditorRef } from './lexical/LexicalEditor';
-import { useAuth } from '@/lib/AuthContext';
+import { useAuth } from '@/webauthn/AuthContext';
 
 export interface SecureNotesDemoProps {
   initialEmail?: string;

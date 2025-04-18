@@ -1,7 +1,7 @@
 import React from 'react';
 import { Meta, StoryObj } from '@storybook/react';
 import { EnvGroupManager } from './EnvGroupManager';
-import { AuthProvider } from '@/lib/AuthContext';
+import { AuthProvider } from '@/webauthn/AuthContext';
 const meta: Meta<typeof EnvGroupManager> = {
   title: 'security/EnvGroupManager',
   component: EnvGroupManager,

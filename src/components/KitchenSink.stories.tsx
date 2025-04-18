@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { KitchenSink } from './KitchenSink';
-import { AuthProvider } from '../lib/AuthContext';
+import { AuthProvider } from '../webauthn/AuthContext';
 import React from 'react';
 
 const meta: Meta<typeof KitchenSink> = {

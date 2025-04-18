@@ -17,7 +17,7 @@ import { useDatabase, DBOperations, ParseSchema } from '../pglite'; // Adjust pa
 import { Button } from '@/components/aria/Button';
 import { Edit, Save, Plus, Trash2, AlertCircle } from 'lucide-react';
 import { StatusIndicator } from '@/wmcp/components/status/StatusIndicator';
-import { AuthProvider, useAuth } from '../lib/AuthContext';
+import { AuthProvider, useAuth } from '../webauthn/AuthContext';
 import { LoginPage } from './LoginPage';
 // import type { Tool } from '../wmcp/types'; // Add this import for Tool type
 

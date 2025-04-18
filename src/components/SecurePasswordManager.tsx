@@ -3,7 +3,7 @@ import { KeyRound, Shield, Eye, EyeOff, Plus, Trash2, ExternalLink, Copy, Check,
 import { DatabaseProvider, useDatabase } from '../pglite/db-context';
 import { ParseSchema } from '@/pglite';
 import { SecureVaultSidebar, VaultItem } from './SecureVaultSidebar';
-import { useAuth } from '@/lib/AuthContext';
+import { useAuth } from '@/webauthn/AuthContext';
 
 // Define the schema for our password manager
 const PASSWORD_MANAGER_SCHEMA = `

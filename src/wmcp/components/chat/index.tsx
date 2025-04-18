@@ -1,19 +1,18 @@
 import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
 
-import { Form, DialogTrigger, Checkbox } from 'react-aria-components';
+import { Form } from 'react-aria-components';
 import { Button } from '@/components/aria/Button';
 import { TextField } from '../../../components/aria/TextField';
 import { MenuTrigger, Modal, ModalOverlay, Dialog, Heading } from 'react-aria-components';
-import { WrenchIcon, Wand2, Send, Settings, MoreHorizontal, Plus, AlertCircle, Server, Save, Check, Info, X, Key, Database } from 'lucide-react';
-import { Menu, MenuItem, MenuSection } from '@/components/aria/Menu';
-import { animate, AnimatePresence, motion, useMotionTemplate, useMotionValue, useMotionValueEvent, useTransform } from 'framer-motion';
-import { AlertDialog } from '@/components/aria/AlertDialog';
+import { WrenchIcon, Wand2, Send, Settings, MoreHorizontal, Plus, AlertCircle, Server, X, Key, Database } from 'lucide-react';
+import { Menu, MenuItem } from '@/components/aria/Menu';
+import { animate, AnimatePresence, motion, useMotionTemplate, useMotionValue, useTransform } from 'framer-motion';
 import { Switch } from '@/components/aria/Switch';
-import { 
-  Disclosure, 
-  DisclosureGroup, 
-  DisclosureHeader, 
-  DisclosurePanel 
+import {
+  Disclosure,
+  DisclosureGroup,
+  DisclosureHeader,
+  DisclosurePanel
 } from '@/components/aria/Disclosure';
 import { ActionCard } from '@/wmcp/components/layout/ActionCard';
 import { ChatList } from './ChatList';
@@ -21,8 +20,7 @@ import { ChatList } from './ChatList';
 import { Tool } from '@modelcontextprotocol/sdk/types';
 import { ServerConfig } from '../../lib/McpClientManager';
 import { MCPServerStatus, useMCPServer } from '../../hooks/useMcpServer';
-import { startRegistration, startAuthentication, WebAuthnError } from '../../lib/webauthn';
-import { deriveKey, encryptData, decryptData } from '../../lib/utils';
+import { startRegistration, startAuthentication, WebAuthnError, deriveKey, encryptData, decryptData } from '../../../webauthn';
 import { LoadingIndicator } from '../status/LoadingIndicator';
 import { ErrorDisplay } from '../status/ErrorDisplay';
 import { DatabaseContext } from '../../../pglite/db-context';
@@ -626,7 +624,7 @@ function ApiKeyAlertDialog({ apiKey, onChange, isOpen, activeServers, onConfigur
       setIsLoading(true);
       
       // Start WebAuthn registration with default username
-      const credential = await startRegistration();
+      const credential = await startRegistration(inputValue);
       console.log('Registration successful:', credential);
       
       // Encrypt and save API key if provided

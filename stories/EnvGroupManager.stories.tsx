@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { EnvGroupManager } from '../src/components/EnvGroupManager';
-import { AuthProvider } from '../src/lib/AuthContext';
+import { AuthProvider } from '../src/webauthn/AuthContext';
 
 const withAuthProvider = (Story: React.ComponentType) => (
   <AuthProvider>

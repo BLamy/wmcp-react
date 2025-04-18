@@ -7,7 +7,7 @@ import {
   WebAuthnError,
   deriveKey,
   base64URLStringToBuffer // Needed if you use rawId directly for key derivation
-} from '../wmcp/lib/webauthn'; // Adjust the import path as needed
+} from '.'; // Adjust the import path as needed
 import { LoginPage } from '../components/LoginPage';
 
 interface AuthContextType {

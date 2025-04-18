@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { KeyRound, Shield, Eye, EyeOff, Plus, Trash2, ExternalLink, Copy, Check, Settings, ShieldCheck, Edit } from 'lucide-react';
 import { DatabaseProvider, useDatabase } from '../pglite/db-context';
 import { ParseSchema } from '@/pglite';
-import { useAuth } from '@/lib/AuthContext';
+import { useAuth } from '@/webauthn/AuthContext';
 
 // Define the schema for our env group manager
 const ENV_GROUP_MANAGER_SCHEMA = `

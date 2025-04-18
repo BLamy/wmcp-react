@@ -15,7 +15,7 @@ import {
   ErrorDisplay,
   LoadingIndicator
 } from '../src/wmcp/components';
-import { ResizablePanel, ResizableHandle, ResizablePanelGroup } from '../src/Resizable';
+import { ResizablePanel, ResizableHandle, ResizablePanelGroup } from '../src/components/ui/resizable';
 import 'xterm/css/xterm.css';
 
 const meta: Meta = {
@@ -563,6 +563,95 @@ export const RunCommands: Story = {
     );
   }
 };
+
+
+
+// Story 2: Running Commands with Interactive Terminal
+export const Codex: Story = {
+  render: () => {
+    const webContainer = useWebContainer();
+    const [message, setMessage] = useState<string>('');
+    const [apiKey, setApiKey] = useState<string>('');
+    const [showApiKeyDialog, setShowApiKeyDialog] = useState<boolean>(true);
+    const [terminalReady, setTerminalReady] = useState<boolean>(false);
+
+    const handleTerminalInitialized = () => {
+      setMessage('Terminal initialized and ready for commands!');
+    };
+
+    const handleTerminalError = (error: any) => {
+      setMessage(`Terminal error: ${error.message || String(error)}`);
+    };
+
+    const handleApiKeySave = (key: string) => {
+      setApiKey(key);
+      setShowApiKeyDialog(false);
+      setTerminalReady(true);
+      setMessage('API key saved. Terminal is now available.');
+    };
+
+    return (
+      <div className="border rounded-md p-4 bg-gray-100 dark:bg-zinc-800">
+        <h3 className="font-semibold mb-4">OpenAI Codex Terminal</h3>
+        
+        {message && (
+          <div className="mb-4 p-2 bg-blue-50 text-blue-700 rounded text-sm border border-blue-200">
+            {message}
+          </div>
+        )}
+        
+        {showApiKeyDialog && (
+          <div className="mb-4 p-4 bg-white dark:bg-gray-800 rounded-md shadow-md">
+            <h4 className="font-medium mb-2">OpenAI API Key Required</h4>
+            <p className="text-sm mb-4 text-gray-600 dark:text-gray-400">
+              An OpenAI API key is required to use Codex functionality. Your key will be used only in this browser session.
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="sk-..."
+                className="flex-1 px-3 py-2 border rounded-md text-sm"
+              />
+              <button
+                onClick={() => handleApiKeySave(apiKey)}
+                disabled={!apiKey.trim().startsWith('sk-')}
+                className={`px-4 py-2 rounded-md text-white text-sm ${
+                  apiKey.trim().startsWith('sk-')
+                    ? 'bg-blue-600 hover:bg-blue-700'
+                    : 'bg-gray-400 cursor-not-allowed'
+                }`}
+              >
+                Save Key
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {terminalReady && (
+          <div className="border rounded-md overflow-hidden bg-black">
+            <WebTerminal
+              webContainer={webContainer}
+              height={400}
+              initialCommands={[
+                'npm init -y',
+                'pnpm install @openai/codex --ignore-scripts',
+                `echo "export OPENAI_API_KEY=${apiKey}" >> ~/.bashrc`,
+                `echo "export CODEX_QUIET_MODE=1" >> ~/.bashrc`,
+                'source ~/.bashrc',
+                'echo "OpenAI API key configured. Codex is ready to use."'
+              ]}
+              onInitialized={handleTerminalInitialized}
+              onError={handleTerminalError}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+};
+
 
 // Story 3: Simple Node.js App
 export const NodeJsApp: Story = {
