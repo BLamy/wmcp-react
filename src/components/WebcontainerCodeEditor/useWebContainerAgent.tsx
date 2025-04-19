@@ -3,6 +3,13 @@
 import { useState, useRef, useEffect, useCallback, useContext } from "react";
 import { WebContainerContext } from "../../wmcp/providers/Webcontainer";
 
+// Add type definition for the global mcpExecuteTool function
+declare global {
+  interface Window {
+    mcpExecuteTool?: (name: string, args: any) => Promise<any>;
+  }
+}
+
 // Message types - keeping these the same as in useSandpackAgent
 export interface ToolCall {
   id: string;
@@ -21,7 +28,7 @@ export interface ToolResult {
   lineCount?: number;
   lineRange?: { start: number; end: number };
   totalLines?: number;
-  files?: string[];
+  files?: string[] | { name: string; type: string; path: string }[];
   path?: string;
   query?: string;
   results?: any;
@@ -347,6 +354,19 @@ export function useWebContainerAgent({
   const messageQueue = useRef<(string | ContentBlock[])[]>([]);
   const testResults = useRef<any>(null);
   const currentFileRef = useRef<string | null>(null);
+  
+  // Add a ref to keep track of the current tools
+  const currentTools = useRef(tools);
+  
+  // Update tools ref when tools prop changes
+  useEffect(() => {
+    currentTools.current = tools;
+  }, [tools]);
+  
+  // Function to update tools after initialization
+  const updateTools = (newTools: any[]) => {
+    currentTools.current = newTools;
+  };
 
   const isDirectory = async (path: string): Promise<boolean> => {
     try {
@@ -388,8 +408,56 @@ export function useWebContainerAgent({
     };
 
     for (const message of messagesToFormat) {
-      // Skip tool calls and tool results in the conversation history
-      if (message.type === "tool_call" || message.type === "tool_result") {
+      // Handle tool calls and tool results in the conversation history
+      if (message.type === "tool_call") {
+        // If there's a pending message, add it
+        if (currentRole) {
+          addMessage();
+        }
+        
+        // Add tool call as assistant message
+        const toolArgs = JSON.stringify(message.toolCall.arguments, null, 2);
+        const toolCallContent = `I'll use the ${message.toolCall.name} tool.\nInput: ${toolArgs}`;
+        formattedMessages.push({
+          role: "assistant",
+          content: toolCallContent
+        });
+        
+        // Reset
+        currentRole = null;
+        continue;
+      } 
+      else if (message.type === "tool_result") {
+        // If there's a pending message, add it
+        if (currentRole) {
+          addMessage();
+        }
+        
+        // Add tool result as user message
+        let resultContent = "";
+        if (message.result.status === "success") {
+          resultContent = `Tool ${message.toolCallId} completed successfully: ${message.result.message}`;
+          
+          // Include content if available
+          if (message.result.content) {
+            resultContent += `\nOutput: ${message.result.content}`;
+          }
+          
+          // Include command output if available
+          if (message.result.output) {
+            resultContent += `\nCommand output: ${message.result.output}`;
+          }
+        } else {
+          resultContent = `Tool ${message.toolCallId} failed: ${message.result.error}`;
+        }
+        
+        formattedMessages.push({
+          role: "user",
+          content: resultContent
+        });
+        
+        // Reset
+        currentRole = null;
         continue;
       }
 
@@ -440,79 +508,8 @@ export function useWebContainerAgent({
       // Add user message to messages
       setMessages(prev => [...prev, userMessageObj]);
       
-      // Get the current list of messages, including the new user message
-      const currentMessages = [...messages, userMessageObj];
-      
-      // Format messages for the API
-      const formattedMessages = formatMessagesForAPI(currentMessages);
-      
-      // Call the LLM
-      let response;
-      try {
-        response = await callLLM(
-          formattedMessages,
-          systemPrompt,
-          tools
-        );
-      } catch (error) {
-        console.error("Error calling LLM:", error);
-        throw error;
-      }
-      
-      // Process the response
-      if (response.content && Array.isArray(response.content)) {
-        for (const contentItem of response.content) {
-          if (contentItem.type === "text") {
-            // Handle text content
-            const assistantMessage: AssistantTextMessage = {
-              id: generateId(),
-              type: "assistant_message",
-              content: contentItem.text,
-              timestamp: new Date(),
-            };
-            setMessages(prev => [...prev, assistantMessage]);
-          } else if (contentItem.type === "tool_use") {
-            // Handle tool use
-            const toolCall: ToolCall = {
-              id: contentItem.id,
-              name: contentItem.name,
-              arguments: contentItem.input,
-            };
-            
-            const toolCallMessage: ToolCallMessage = {
-              id: generateId(),
-              type: "tool_call",
-              toolCall,
-              timestamp: new Date(),
-            };
-            
-            setMessages(prev => [...prev, toolCallMessage]);
-            
-            // Execute the tool and get the result
-            const result = await handleToolCall(contentItem.name, contentItem.input);
-            
-            // Create tool result message
-            const toolResultMessage: ToolResultMessage = {
-              id: generateId(),
-              type: "tool_result",
-              toolCallId: contentItem.id,
-              result,
-              timestamp: new Date(),
-            };
-            
-            setMessages(prev => [...prev, toolResultMessage]);
-          }
-        }
-      } else if (typeof response.content === "string") {
-        // Handle simple text response
-        const assistantMessage: AssistantTextMessage = {
-          id: generateId(),
-          type: "assistant_message",
-          content: response.content,
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, assistantMessage]);
-      }
+      // Continue the conversation with the new user message
+      await continueConversation([...messages, userMessageObj]);
     } catch (error) {
       console.error("Error in processUserMessage:", error);
       
@@ -538,6 +535,213 @@ export function useWebContainerAgent({
     }
   };
 
+  // New function to handle recursive tool calls
+  const continueConversation = async (currentMessages: Message[]) => {
+    try {
+      // Format messages for the API
+      const formattedMessages = formatMessagesForAPI(currentMessages);
+      
+      // Call the LLM
+      let response;
+      try {
+        console.log('LLM Request:', JSON.stringify(formattedMessages, null, 2), JSON.stringify(currentTools.current, null, 2));
+        response = await callLLM(
+          formattedMessages,
+          systemPrompt,
+          currentTools.current
+        );
+        console.log("LLM Response:", JSON.stringify(response, null, 2));
+      } catch (error) {
+        console.error("Error calling LLM:", error);
+        throw error;
+      }
+      
+      // Track if we need to continue the conversation
+      let shouldContinue = false;
+      let newMessages: Message[] = [...currentMessages];
+      
+      // Process the response
+      if (response && response.content) {
+        // Handle different Anthropic response formats
+        if (Array.isArray(response.content)) {
+          // Process array of content blocks
+          for (const contentItem of response.content) {
+            if (contentItem.type === "text") {
+              // Handle text content
+              const assistantMessage: AssistantTextMessage = {
+                id: generateId(),
+                type: "assistant_message",
+                content: contentItem.text,
+                timestamp: new Date(),
+              };
+              newMessages = [...newMessages, assistantMessage];
+              setMessages(prev => [...prev, assistantMessage]);
+            } else if (contentItem.type === "tool_use") {
+              // Handle tool use
+              const toolCall: ToolCall = {
+                id: contentItem.id,
+                name: contentItem.name,
+                arguments: contentItem.input,
+              };
+              
+              const toolCallMessage: ToolCallMessage = {
+                id: generateId(),
+                type: "tool_call",
+                toolCall,
+                timestamp: new Date(),
+              };
+              
+              newMessages = [...newMessages, toolCallMessage];
+              setMessages(prev => [...prev, toolCallMessage]);
+              
+              // Execute the tool and get the result
+              const result = await handleToolCall(contentItem.name, contentItem.input);
+              
+              // Create tool result message
+              const toolResultMessage: ToolResultMessage = {
+                id: generateId(),
+                type: "tool_result",
+                toolCallId: contentItem.id,
+                result,
+                timestamp: new Date(),
+              };
+              
+              newMessages = [...newMessages, toolResultMessage];
+              setMessages(prev => [...prev, toolResultMessage]);
+              
+              // Set flag to continue the conversation
+              shouldContinue = true;
+            }
+          }
+        } else if (typeof response.content === "string") {
+          // Handle simple text response
+          const assistantMessage: AssistantTextMessage = {
+            id: generateId(),
+            type: "assistant_message",
+            content: response.content,
+            timestamp: new Date(),
+          };
+          newMessages = [...newMessages, assistantMessage];
+          setMessages(prev => [...prev, assistantMessage]);
+        } else if (response.type === "message" && response.content && response.role === "assistant") {
+          // Handle Anthropic v1/messages format
+          if (Array.isArray(response.content)) {
+            for (const item of response.content) {
+              if (item.type === "text") {
+                const assistantMessage: AssistantTextMessage = {
+                  id: generateId(),
+                  type: "assistant_message",
+                  content: item.text,
+                  timestamp: new Date(),
+                };
+                newMessages = [...newMessages, assistantMessage];
+                setMessages(prev => [...prev, assistantMessage]);
+              } else if (item.type === "tool_use") {
+                const toolCall: ToolCall = {
+                  id: item.id,
+                  name: item.name,
+                  arguments: item.input,
+                };
+                
+                const toolCallMessage: ToolCallMessage = {
+                  id: generateId(),
+                  type: "tool_call",
+                  toolCall,
+                  timestamp: new Date(),
+                };
+                
+                newMessages = [...newMessages, toolCallMessage];
+                setMessages(prev => [...prev, toolCallMessage]);
+                
+                // Execute the tool and get the result
+                const result = await handleToolCall(item.name, item.input);
+                
+                // Create tool result message
+                const toolResultMessage: ToolResultMessage = {
+                  id: generateId(),
+                  type: "tool_result",
+                  toolCallId: item.id,
+                  result,
+                  timestamp: new Date(),
+                };
+                
+                newMessages = [...newMessages, toolResultMessage];
+                setMessages(prev => [...prev, toolResultMessage]);
+                
+                // Set flag to continue the conversation
+                shouldContinue = true;
+              }
+            }
+          }
+        } else if (response.role === "assistant" && response.model && response.id) {
+          // Handle Claude 3 messages API format
+          const responseContent = response.content;
+          
+          if (Array.isArray(responseContent)) {
+            for (const item of responseContent) {
+              if (item.type === "text") {
+                const assistantMessage: AssistantTextMessage = {
+                  id: generateId(),
+                  type: "assistant_message",
+                  content: item.text,
+                  timestamp: new Date(),
+                };
+                newMessages = [...newMessages, assistantMessage];
+                setMessages(prev => [...prev, assistantMessage]);
+              } else if (item.type === "tool_use") {
+                const toolCall: ToolCall = {
+                  id: item.id,
+                  name: item.name,
+                  arguments: item.input,
+                };
+                
+                const toolCallMessage: ToolCallMessage = {
+                  id: generateId(),
+                  type: "tool_call",
+                  toolCall,
+                  timestamp: new Date(),
+                };
+                
+                newMessages = [...newMessages, toolCallMessage];
+                setMessages(prev => [...prev, toolCallMessage]);
+                
+                // Execute the tool and get the result
+                const result = await handleToolCall(item.name, item.input);
+                
+                // Create tool result message
+                const toolResultMessage: ToolResultMessage = {
+                  id: generateId(),
+                  type: "tool_result",
+                  toolCallId: item.id,
+                  result,
+                  timestamp: new Date(),
+                };
+                
+                newMessages = [...newMessages, toolResultMessage];
+                setMessages(prev => [...prev, toolResultMessage]);
+                
+                // Set flag to continue the conversation
+                shouldContinue = true;
+              }
+            }
+          }
+        }
+      }
+      
+      // Continue the conversation with the LLM if there were tool calls
+      if (shouldContinue) {
+        // Add a small delay to avoid rate limits
+        await delay(100);
+        
+        console.log("Continuing conversation after tool call with messages:", newMessages.length);
+        await continueConversation(newMessages);
+      }
+    } catch (error) {
+      console.error("Error in continueConversation:", error);
+      throw error;
+    }
+  };
+
   const sendMessage = async (userMessage: string | ContentBlock[]) => {
     // If there's already a conversation in progress, queue the message
     if (conversationInProgress.current) {
@@ -557,11 +761,49 @@ export function useWebContainerAgent({
 
   // The tool handling is the key difference from useSandpackAgent - it uses WebContainer APIs
   const handleToolCall = async (name: string, input: any): Promise<ToolResult> => {
+    // First check if we have a proper WebContainer instance
     if (!webContainer) {
-      throw new Error("WebContainer not initialized");
+      console.error("WebContainer not initialized, cannot execute tool:", name);
+      return {
+        status: "error",
+        error: "WebContainer not initialized. Please wait for WebContainer to load and try again."
+      };
+    }
+
+    // Check if WebContainer is ready and accessible
+    try {
+      // Light probe to see if WebContainer proxy is still usable
+      await webContainer.fs.readdir('/');
+    } catch (error) {
+      console.error("WebContainer proxy error, container may have been released:", error);
+      return {
+        status: "error",
+        error: "WebContainer appears to be unavailable or has been released. Try refreshing the page and restarting your WebContainer."
+      };
     }
 
     try {
+      // Check if it's a MCP tool that needs to be executed through the MCP server
+      if (window.mcpExecuteTool && typeof window.mcpExecuteTool === 'function') {
+        // This is a workaround to access MCP tools - we set a global executeTool function
+        // that WebContainerAgent component can set when MCP tools are available
+        try {
+          const mpcResult = await window.mcpExecuteTool(name, input);
+          if (mpcResult) {
+            console.log(`MPC tool ${name} executed successfully:`, mpcResult);
+            return {
+              status: "success",
+              message: `MPC tool ${name} executed successfully`,
+              ...mpcResult
+            };
+          }
+        } catch (error) {
+          console.error(`MPC tool execution error for ${name}:`, error);
+          // If MPC tool execution fails, we'll fall back to regular tools
+        }
+      }
+
+      // Regular WebContainer tools
       switch (name) {
         case "edit_file": {
           const { file_path, content } = input;
@@ -572,6 +814,7 @@ export function useWebContainerAgent({
             oldContent = await webContainer.fs.readFile(file_path, 'utf-8');
           } catch (error) {
             // File might not exist, which is fine for new files
+            console.log(`File ${file_path} not found, will create it.`);
           }
 
           // Make sure the parent directory exists
@@ -581,41 +824,73 @@ export function useWebContainerAgent({
               await webContainer.fs.mkdir(dirPath, { recursive: true });
             } catch (error) {
               // Directory might already exist, which is fine
+              console.log(`Directory ${dirPath} already exists or couldn't be created:`, error);
             }
           }
 
-          // Update the file
-          await webContainer.fs.writeFile(file_path, content);
+          // Use a try-catch block specifically for the write operation
+          try {
+            // Update the file
+            await webContainer.fs.writeFile(file_path, content);
 
-          return {
-            status: "success",
-            message: `File ${file_path} updated successfully`,
-            oldContent,
-            newContent: content,
-          };
+            return {
+              status: "success",
+              message: `File ${file_path} updated successfully`,
+              oldContent,
+              newContent: content,
+            };
+          } catch (error: any) {
+            console.error(`Error writing to file ${file_path}:`, error);
+            return {
+              status: "error",
+              error: `Failed to write to file ${file_path}: ${error?.message || "Unknown error"}`
+            };
+          }
         }
         
         case "create_file": {
           const { file_path, content } = input;
           
-          // Make sure the parent directory exists
-          const dirPath = file_path.substring(0, file_path.lastIndexOf('/'));
-          if (dirPath) {
-            try {
-              await webContainer.fs.mkdir(dirPath, { recursive: true });
-            } catch (error) {
-              // Directory might already exist, which is fine
+          try {
+            // Make sure the parent directory exists
+            const dirPath = file_path.substring(0, file_path.lastIndexOf('/'));
+            if (dirPath) {
+              try {
+                await webContainer.fs.mkdir(dirPath, { recursive: true });
+              } catch (error) {
+                // Directory might already exist, which is fine
+                console.log(`Directory ${dirPath} already exists or couldn't be created.`);
+              }
             }
+
+            // Check if file already exists
+            let fileExists = false;
+            try {
+              await webContainer.fs.readFile(file_path, 'utf-8');
+              fileExists = true;
+            } catch (error) {
+              // File doesn't exist, which is what we want for create
+            }
+
+            if (fileExists) {
+              console.log(`File ${file_path} already exists, overwriting.`);
+            }
+
+            // Create the file
+            await webContainer.fs.writeFile(file_path, content);
+
+            return {
+              status: "success",
+              message: `File ${file_path} created successfully`,
+              content,
+            };
+          } catch (error: any) {
+            console.error(`Error creating file ${file_path}:`, error);
+            return {
+              status: "error",
+              error: `Failed to create file ${file_path}: ${error?.message || "Unknown error"}`
+            };
           }
-
-          // Create the file
-          await webContainer.fs.writeFile(file_path, content);
-
-          return {
-            status: "success",
-            message: `File ${file_path} created successfully`,
-            content,
-          };
         }
         
         case "delete_file": {
@@ -1026,6 +1301,7 @@ export function useWebContainerAgent({
     testResults: testResults.current,
     updateTestResults,
     setCurrentFile,
-    activeFile: currentFileRef.current
+    activeFile: currentFileRef.current,
+    updateTools
   };
 }

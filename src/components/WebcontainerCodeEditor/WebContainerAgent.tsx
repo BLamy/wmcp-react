@@ -427,6 +427,27 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
     mcpServers: activeServers
   });
 
+  // Register the MPC executeTool function globally so it can be accessed by the WebContainerAgent
+  useEffect(() => {
+    if (executeTool) {
+      console.log("Setting global mcpExecuteTool function");
+      window.mcpExecuteTool = executeTool;
+      
+      // For debugging
+      window.mcpExecuteTool("sequentialthinking", { thought: "Test thought", nextThoughtNeeded: true, thoughtNumber: 1, totalThoughts: 5 })
+        .then(result => console.log("Test MCP execution result:", result))
+        .catch(err => console.error("Test MCP execution error:", err));
+    }
+    
+    return () => {
+      // Clean up when component unmounts
+      if (window.mcpExecuteTool) {
+        console.log("Removing global mcpExecuteTool function");
+        delete window.mcpExecuteTool;
+      }
+    };
+  }, [executeTool]);
+
   // Add a state to track if WebContainer is ready
   const [webContainerReady, setWebContainerReady] = useState(false);
 
@@ -656,6 +677,31 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
     [apiKey, onRequestApiKey]
   );
 
+  // Function to transform MPC tools to match Anthropic's API format
+  const transformMpcTools = (tools: any[]) => {
+    return tools.map(tool => {
+      // Create a copy with a more flexible type to allow property manipulation
+      const transformedTool: Record<string, any> = { ...tool };
+      
+      // Convert inputSchema to input_schema if it exists
+      if ('inputSchema' in transformedTool && !('input_schema' in transformedTool)) {
+        transformedTool.input_schema = transformedTool.inputSchema;
+        delete transformedTool.inputSchema;
+      }
+      
+      // Check for additional MPC-specific properties that need conversion
+      if (transformedTool.custom && typeof transformedTool.custom === 'object') {
+        const customObj = transformedTool.custom as Record<string, any>;
+        if ('inputSchema' in customObj && !('input_schema' in customObj)) {
+          customObj.input_schema = customObj.inputSchema;
+          delete customObj.inputSchema;
+        }
+      }
+      
+      return transformedTool;
+    });
+  };
+
   // Get the agent hook with our custom callLLM function
   const {
     messages: agentMessages,
@@ -663,11 +709,26 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
     clearMessages: clearAgentMessages,
     isLoading,
     updateTestResults,
+    updateTools
   } = useWebContainerAgent({
     callLLM: callLLM,
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
-    tools: DEFAULT_TOOLS,
+    tools: mcpTools && mcpTools.length > 0 
+      ? [...DEFAULT_TOOLS, ...transformMpcTools(mcpTools)] 
+      : DEFAULT_TOOLS,
   });
+
+  // Update tools when mcpTools changes
+  useEffect(() => {
+    if (updateTools && mcpTools) {
+      // Transform MPC tools to match Anthropic's API format
+      const transformedMpcTools = transformMpcTools(mcpTools);
+      
+      const combinedTools = transformedMpcTools.length > 0 ? [...DEFAULT_TOOLS, ...transformedMpcTools] : DEFAULT_TOOLS;
+      updateTools(combinedTools);
+      console.log("Updated tools with MCP tools:", transformedMpcTools.length);
+    }
+  }, [mcpTools, updateTools]);
 
   // Sync agent messages with the Chat component's messages
   useEffect(() => {
@@ -986,22 +1047,7 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
                     </span>
                   )}
                 </div>
-                {toolResult.content && (
-                  <div className="mt-2 pt-2 border-t border-[#3c3c3c]">
-                    <div className="text-xs font-medium mb-1">Content:</div>
-                    <pre className="text-xs font-mono overflow-auto p-2 bg-[#252526] rounded max-h-64">
-                      {toolResult.content}
-                    </pre>
-                  </div>
-                )}
-                {toolResult.output && (
-                  <div className="mt-2 pt-2 border-t border-[#3c3c3c]">
-                    <div className="text-xs font-medium mb-1">Output:</div>
-                    <pre className="text-xs font-mono overflow-auto p-2 bg-[#252526] rounded max-h-64">
-                      {toolResult.output}
-                    </pre>
-                  </div>
-                )}
+                {renderToolResultContent(toolResult)}
               </div>
             )}
           </div>
@@ -1203,6 +1249,73 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
       alert("WebContainer is not initialized. Please wait a moment and try again.");
       console.log("WebContainer status:", webContainer ? "Available" : "Not Available");
     }
+  };
+
+  // Safely render tool result content
+  const renderToolResultContent = (result: ToolResult) => {
+    if (!result) return null;
+    
+    if (result.content) {
+      // Handle complex content objects that might be returned by MPC tools
+      if (typeof result.content === 'object' && Array.isArray(result.content)) {
+        // Create a local typed variable to help TypeScript understand the type
+        const contentItems: any[] = result.content;
+        
+        return (
+          <div className="mt-2 pt-2 border-t border-[#3c3c3c]">
+            <div className="text-xs font-medium mb-1">Content:</div>
+            {contentItems.map((item: any, index: number) => {
+              if (typeof item === 'object' && item !== null) {
+                // Check both conditions separately for clarity and consistency
+                if (item.type === 'text' && 'text' in item) {
+                  return (
+                    <pre key={index} className="text-xs font-mono overflow-auto p-2 bg-[#252526] rounded max-h-64">
+                      {String(item.text)}
+                    </pre>
+                  );
+                }
+                // For other object types, stringify them
+                return (
+                  <pre key={index} className="text-xs font-mono overflow-auto p-2 bg-[#252526] rounded max-h-64">
+                    {JSON.stringify(item, null, 2)}
+                  </pre>
+                );
+              }
+              // For simple string content
+              return (
+                <pre key={index} className="text-xs font-mono overflow-auto p-2 bg-[#252526] rounded max-h-64">
+                  {String(item)}
+                </pre>
+              );
+            })}
+          </div>
+        );
+      }
+      
+      // For string content
+      if (typeof result.content === 'string') {
+        return (
+          <div className="mt-2 pt-2 border-t border-[#3c3c3c]">
+            <div className="text-xs font-medium mb-1">Content:</div>
+            <pre className="text-xs font-mono overflow-auto p-2 bg-[#252526] rounded max-h-64">
+              {result.content}
+            </pre>
+          </div>
+        );
+      }
+      
+      // For other object types (non-array objects)
+      return (
+        <div className="mt-2 pt-2 border-t border-[#3c3c3c]">
+          <div className="text-xs font-medium mb-1">Content:</div>
+          <pre className="text-xs font-mono overflow-auto p-2 bg-[#252526] rounded max-h-64">
+            {JSON.stringify(result.content, null, 2)}
+          </pre>
+        </div>
+      );
+    }
+    
+    return null;
   };
 
   return (
