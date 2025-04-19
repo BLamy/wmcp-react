@@ -1,14 +1,25 @@
-import React from 'react';
-import { Tree, TreeItem, TreeItemContent } from '../../../components/aria/Tree';
-import { FileSystemTree as WebContainerFileSystemTree} from '@webcontainer/api';
+import React, { useState, useEffect, useRef } from 'react';
+import { ChevronDown, ChevronRight, FileIcon, FolderIcon, FolderOpenIcon } from 'lucide-react';
+import { 
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton
+} from '../../../components/ui/sidebar';
+import { FileSystemTree as WebContainerFileSystemTree } from '@webcontainer/api';
 
+interface FSEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  children?: FSEntry[];
+}
 
 /**
  * Props for the FileSystemTree component
  */
 export interface FileSystemTreeProps {
   /** The file system entries to render */
-  files: WebContainerFileSystemTree[];
+  files: FSEntry[];
   /** Handler for selection changes */
   onSelectionChange?: (paths: string[]) => void;
   /** Currently selected paths */
@@ -18,15 +29,21 @@ export interface FileSystemTreeProps {
   /** Handler for expansion changes */
   onExpandedChange?: (paths: string[]) => void;
   /** Custom renderer for file/directory icons */
-  renderIcon?: (entry:  WebContainerFileSystemTree) => React.ReactNode;
+  renderIcon?: (entry: FSEntry) => React.ReactNode;
   /** Whether the tree is disabled */
   disabled?: boolean;
   /** Selection mode for the tree */
   selectionMode?: 'single' | 'multiple' | 'none';
+  /** Auto refresh interval in milliseconds (set to 0 to disable) */
+  refreshInterval?: number;
+  /** Callback to rebuild/refresh the file tree */
+  onRefresh?: () => Promise<void> | void;
+  /** Show loading indicator during auto-refresh */
+  showAutoRefreshIndicator?: boolean;
 }
 
 /**
- * A reusable component for displaying file system trees
+ * A reusable component for displaying file system trees with a sidebar UI
  */
 export function FileSystemTree({
   files,
@@ -36,69 +53,201 @@ export function FileSystemTree({
   onExpandedChange,
   renderIcon,
   disabled = false,
-  selectionMode = 'single'
+  selectionMode = 'single',
+  refreshInterval = 0,
+  onRefresh,
+  showAutoRefreshIndicator = false
 }: FileSystemTreeProps) {
-  // Handle tree selection change
-  const handleSelectionChange = (keys: Set<React.Key>) => {
-    if (onSelectionChange) {
-      const selectedKeysArray = Array.from(keys).map(key => String(key));
-      onSelectionChange(selectedKeysArray);
+  // Convert expandedPaths array to a record for easier lookup
+  const [expandedFoldersState, setExpandedFoldersState] = useState<Record<string, boolean>>(
+    expandedPaths.reduce((acc, path) => ({ ...acc, [path]: true }), {})
+  );
+  
+  // State to track if auto-refresh is active
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // Use ref to track if we're mounted to prevent memory leaks
+  const isMounted = useRef(true);
+  // Reference to the interval ID
+  const intervalIdRef = useRef<number | null>(null);
+
+  // Handle component mount/unmount
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+      if (intervalIdRef.current) {
+        window.clearInterval(intervalIdRef.current);
+        intervalIdRef.current = null;
+      }
+    };
+  }, []);
+  
+  // Set up auto-refresh
+  useEffect(() => {
+    // Clear any existing interval first
+    if (intervalIdRef.current) {
+      window.clearInterval(intervalIdRef.current);
+      intervalIdRef.current = null;
+      console.log('Cleared previous interval');
+    }
+    
+    if (!refreshInterval || !onRefresh || refreshInterval < 1000) {
+      console.log('Auto-refresh disabled or invalid config:', { refreshInterval, hasOnRefresh: !!onRefresh });
+      return;
+    }
+    
+    console.log('Setting up auto-refresh with interval:', refreshInterval);
+    
+    const doRefresh = async () => {
+      if (isRefreshing || !isMounted.current) {
+        console.log('Skipping refresh - already refreshing or unmounted');
+        return;
+      }
+      
+      console.log('Auto-refresh triggered');
+      
+      // Only show loading UI if explicitly requested
+      if (showAutoRefreshIndicator) {
+        setIsRefreshing(true);
+      }
+      
+      try {
+        await Promise.resolve(onRefresh());
+        console.log('Auto-refresh completed successfully');
+      } catch (err) {
+        console.error('Error in background refresh:', err);
+      } finally {
+        if (isMounted.current && showAutoRefreshIndicator) {
+          setIsRefreshing(false);
+        }
+      }
+    };
+    
+    // Start with immediate refresh
+    console.log('Running initial refresh');
+    doRefresh();
+    
+    // Create the interval with the window object explicitly
+    console.log(`Setting interval to run every ${refreshInterval}ms`);
+    const id = window.setInterval(() => {
+      console.log('Interval fired, calling doRefresh');
+      doRefresh();
+    }, refreshInterval);
+    
+    // Store the interval ID
+    intervalIdRef.current = id;
+    console.log('Interval ID set:', id);
+    
+    return () => {
+      console.log('Cleaning up auto-refresh interval');
+      if (intervalIdRef.current) {
+        window.clearInterval(intervalIdRef.current);
+        intervalIdRef.current = null;
+      }
+    };
+  }, [refreshInterval, onRefresh, isRefreshing, showAutoRefreshIndicator]);
+
+  // Handle folder toggle
+  const toggleFolder = (path: string) => {
+    const newExpandedFolders = {
+      ...expandedFoldersState,
+      [path]: !expandedFoldersState[path]
+    };
+    
+    setExpandedFoldersState(newExpandedFolders);
+    
+    if (onExpandedChange) {
+      onExpandedChange(Object.entries(newExpandedFolders)
+        .filter(([_, isExpanded]) => isExpanded)
+        .map(([path]) => path));
     }
   };
 
-  // Handle tree expansion change
-  const handleExpandedChange = (keys: Set<React.Key>) => {
-    if (onExpandedChange) {
-      onExpandedChange(Array.from(keys).map(key => String(key)));
+  // Handle file selection
+  const handleSelectFile = (path: string) => {
+    if (onSelectionChange) {
+      if (selectionMode === 'single') {
+        onSelectionChange([path]);
+      } else if (selectionMode === 'multiple') {
+        const isSelected = selectedPaths.includes(path);
+        if (isSelected) {
+          onSelectionChange(selectedPaths.filter(p => p !== path));
+        } else {
+          onSelectionChange([...selectedPaths, path]);
+        }
+      }
     }
   };
 
   // Default icon renderer
-  const defaultRenderIcon = (entry: WebContainerFileSystemTree) => {
+  const defaultRenderIcon = (entry: FSEntry) => {
     if (entry.isDirectory) {
-      return (
-        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-        </svg>
-      );
+      return expandedFoldersState[entry.path] ? 
+        <FolderOpenIcon className="h-4 w-4 mr-2 shrink-0 text-amber-500" /> : 
+        <FolderIcon className="h-4 w-4 mr-2 shrink-0 text-amber-500" />;
     }
-    return (
-      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
-    );
+    return <FileIcon className="h-4 w-4 mr-2 shrink-0 text-blue-500" />;
   };
 
   // Render tree items recursively
-  const renderTreeItems = (entries: FSEntry[]) => {
-    return entries.map(entry => (
-      <TreeItem 
-        key={entry.path} 
-        id={entry.path} 
-        textValue={entry.name}
-      >
-        <TreeItemContent>
-          <div className="flex items-center">
-            {renderIcon ? renderIcon(entry) : defaultRenderIcon(entry)}
-            <span className={entry.isDirectory ? "font-medium" : ""}>{entry.name}</span>
-          </div>
-        </TreeItemContent>
-        {entry.children && entry.children.length > 0 && renderTreeItems(entry.children)}
-      </TreeItem>
-    ));
+  const renderFileTree = (entries: FSEntry[]) => {
+    return entries.map(entry => {
+      const path = entry.path;
+      const isExpanded = expandedFoldersState[path];
+      const isSelected = selectedPaths.includes(path);
+      
+      if (entry.isDirectory) {
+        return (
+          <SidebarMenuItem key={path}>
+            <SidebarMenuButton 
+              onClick={() => toggleFolder(path)} 
+              className={`justify-start ${isSelected ? 'bg-muted' : ''}`}
+            >
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4 mr-1 shrink-0" />
+              ) : (
+                <ChevronRight className="h-4 w-4 mr-1 shrink-0" />
+              )}
+              {renderIcon ? renderIcon(entry) : defaultRenderIcon(entry)}
+              <span className="truncate">{entry.name}</span>
+            </SidebarMenuButton>
+
+            {isExpanded && entry.children && entry.children.length > 0 && (
+              <div className="pl-5 border-l border-gray-200 dark:border-gray-800 ml-2 mt-1">
+                {renderFileTree(entry.children)}
+              </div>
+            )}
+          </SidebarMenuItem>
+        );
+      } else {
+        return (
+          <SidebarMenuItem key={path}>
+            <SidebarMenuButton 
+              onClick={() => handleSelectFile(path)}
+              className={`justify-start ${isSelected ? 'bg-muted text-foreground' : ''} text-sm pl-7`}
+            >
+              {renderIcon ? renderIcon(entry) : defaultRenderIcon(entry)}
+              <span className="truncate">{entry.name}</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        );
+      }
+    });
   };
 
   return (
-    <Tree 
-      aria-label="File System" 
-      selectionMode={selectionMode}
-      selectedKeys={selectedPaths}
-      onSelectionChange={handleSelectionChange}
-      expandedKeys={expandedPaths}
-      onExpandedChange={handleExpandedChange}
-      disabledKeys={disabled ? files.map(f => f.path) : []}
-    >
-      {renderTreeItems(files)}
-    </Tree>
+    <div className="file-system-tree">
+      {showAutoRefreshIndicator && isRefreshing && (
+        <div className="px-2 py-1 text-xs text-muted-foreground bg-muted/30 flex items-center">
+          <svg className="animate-spin -ml-1 mr-2 h-3 w-3 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          Refreshing...
+        </div>
+      )}
+      <SidebarMenu>{renderFileTree(files)}</SidebarMenu>
+    </div>
   );
 } 

@@ -255,7 +255,7 @@ export function WebTerminal({
   
   return (
     <div 
-      className={`border rounded-md overflow-hidden bg-gray-900 ${className}`} 
+      className={`overflow-hidden bg-gray-900 ${className}`} 
       style={{ height }}
     >
       <div 

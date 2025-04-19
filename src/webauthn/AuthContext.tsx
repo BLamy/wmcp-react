@@ -22,7 +22,7 @@ interface AuthContextType {
   /** Indicates if an authentication operation (login/register) is in progress */
   isLoading: boolean;
   /** Function to initiate the login process */
-  login: () => Promise<void>;
+  login: () => Promise<CryptoKey>;
   /** Function to log the user out */
   logout: () => void;
   /** Function to initiate the registration process */
@@ -34,13 +34,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 interface AuthProviderProps {
   children: ReactNode | ((context: AuthContextType) => ReactNode);
+  fallback?: (login: () => Promise<CryptoKey>) => ReactNode 
 }
 
 /**
  * Provides authentication state and functions to its children.
  * Manages user login, logout, registration, and the derived encryption key.
  */
-export const AuthProvider = ({ children }: AuthProviderProps) => {
+export const AuthProvider = ({ children, fallback }: AuthProviderProps) => {
   const [encryptionKey, setEncryptionKey] = useState<CryptoKey | null>(null);
   const [userIdentifier, setUserIdentifier] = useState<string | null>(() => localStorage.getItem('userIdentifier'));
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +83,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       localStorage.setItem('userIdentifier', identifier);
       setError(null);
       console.log('[Auth] Login successful. Identifier:', identifier);
-
+      return key
     } catch (err) {
       console.error("[Auth] Login failed:", err);
       const errorMessage = err instanceof WebAuthnError ? err.message : 'Authentication failed. Please try again.';
@@ -143,11 +144,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     logout,
     register
   };
-
+  if (!fallback) {
+    fallback = () => <LoginPage />
+  }
   // Render children with context
   return (
     <AuthContext.Provider value={contextValue}>
-      {!encryptionKey ? <LoginPage /> 
+      {!encryptionKey ? fallback(login)
         : typeof children === 'function' ? children(contextValue) 
         : children}
     </AuthContext.Provider>

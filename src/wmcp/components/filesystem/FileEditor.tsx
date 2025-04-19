@@ -1,5 +1,5 @@
-import React from 'react';
-import Editor, { OnMount } from '@monaco-editor/react';
+import React, { useRef, useEffect } from 'react';
+import Editor, { OnMount, Monaco } from '@monaco-editor/react';
 
 /**
  * Props for the FileEditor component
@@ -23,6 +23,8 @@ export interface FileEditorProps {
   theme?: string;
   /** Optional additional CSS class names */
   className?: string;
+  /** Key to force editor refresh */
+  refreshKey?: number;
 }
 
 /**
@@ -37,10 +39,12 @@ export function FileEditor({
   height = '500px',
   onMount,
   theme = 'vs-dark',
-  className = ''
+  className = '',
+  refreshKey = 0
 }: FileEditorProps) {
   // Determine language from file extension if not explicitly provided
   const detectedLanguage = language || getLanguageFromPath(path || '');
+  const editorRef = useRef<any>(null);
 
   // Handle content changes
   const handleEditorChange = (value: string | undefined) => {
@@ -49,8 +53,31 @@ export function FileEditor({
     }
   };
 
+  // Store editor reference on mount
+  const handleEditorMount = (editor: any, monaco: Monaco) => {
+    editorRef.current = editor;
+    
+    // Setup TypeScript/JavaScript language features
+    setupTypeScriptSupport(monaco);
+    
+    // Call the original onMount if provided
+    if (onMount) {
+      onMount(editor, monaco);
+    }
+  };
+
+  // Force editor layout update when refreshKey changes
+  useEffect(() => {
+    if (editorRef.current) {
+      // Small delay to ensure the layout update happens after any DOM changes
+      setTimeout(() => {
+        editorRef.current.layout();
+      }, 50);
+    }
+  }, [refreshKey]);
+
   return (
-    <div className={`border rounded-md overflow-hidden h-full ${className}`}>
+    <div className={`overflow-hidden h-full ${className}`} key={refreshKey}>
       <Editor
         height={height}
         language={detectedLanguage}
@@ -65,10 +92,38 @@ export function FileEditor({
           wordWrap: 'on',
           automaticLayout: true
         }}
-        onMount={onMount}
+        onMount={handleEditorMount}
       />
     </div>
   );
+}
+
+/**
+ * Configure Monaco for TypeScript/JavaScript support
+ */
+function setupTypeScriptSupport(monaco: Monaco) {
+  // Set compiler options for TypeScript
+  monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+    target: monaco.languages.typescript.ScriptTarget.ES2020,
+    allowNonTsExtensions: true,
+    moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+    module: monaco.languages.typescript.ModuleKind.CommonJS,
+    noEmit: true,
+    esModuleInterop: true,
+    jsx: monaco.languages.typescript.JsxEmit.React,
+    reactNamespace: 'React',
+    allowJs: true,
+    typeRoots: ["node_modules/@types"]
+  });
+
+  // Same for JavaScript
+  monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
+    allowNonTsExtensions: true,
+    allowJs: true,
+    checkJs: true,
+    jsx: monaco.languages.typescript.JsxEmit.React,
+    target: monaco.languages.typescript.ScriptTarget.ES2020
+  });
 }
 
 /**

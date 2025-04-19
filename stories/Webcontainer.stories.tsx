@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useContext } from 'react';
+import React, { useEffect, useState, useRef, useContext, useCallback } from 'react';
 import { Meta, StoryObj } from '@storybook/react';
 import { WebContainerContext } from '../src/wmcp/providers/Webcontainer';
 import { useWebContainer } from '../src/wmcp/hooks/useWebcontainer';
@@ -454,7 +454,7 @@ This is a demo project showing how to use the WebContainer API to create a file 
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
             {/* File Tree */}
-            <div className="border rounded-md bg-white p-2 h-[500px] overflow-auto">
+            <div className=" bg-white p-2 h-[500px] overflow-auto">
               <h3 className="font-semibold mb-2 p-2 bg-gray-100 dark:bg-zinc-800 rounded sticky top-0">File Explorer</h3>
               {fileTree.length > 0 ? (
                 <Tree 
@@ -475,7 +475,7 @@ This is a demo project showing how to use the WebContainer API to create a file 
             </div>
             
             {/* File Content / Editor */}
-            <div className="border rounded-md bg-white col-span-2 h-[500px] overflow-hidden flex flex-col">
+            <div className="col-span-2 h-[500px] overflow-hidden flex flex-col">
               {currentFilePath ? (
                 <>
                   <div className="bg-gray-100 dark:bg-zinc-800 p-2 flex justify-between items-center sticky top-0">
@@ -538,7 +538,7 @@ export const RunCommands: Story = {
     };
 
     return (
-      <div className="border rounded-md p-4 bg-gray-100 dark:bg-zinc-800">
+      <div className="p-4 bg-gray-100 dark:bg-zinc-800">
         <h3 className="font-semibold mb-4">Run Commands in WebContainer Terminal</h3>
         
         {message && (
@@ -547,7 +547,7 @@ export const RunCommands: Story = {
           </div>
         )}
         
-        <div className="border rounded-md overflow-hidden bg-black">
+        <div className="overflow-hidden bg-black">
           <WebTerminal
             webContainer={webContainer}
             height={400}
@@ -591,7 +591,7 @@ export const Codex: Story = {
     };
 
     return (
-      <div className="border rounded-md p-4 bg-gray-100 dark:bg-zinc-800">
+      <div className="p-4 bg-gray-100 dark:bg-zinc-800">
         <h3 className="font-semibold mb-4">OpenAI Codex Terminal</h3>
         
         {message && (
@@ -612,7 +612,7 @@ export const Codex: Story = {
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder="sk-..."
-                className="flex-1 px-3 py-2 border rounded-md text-sm"
+                className="flex-1 px-3 py-2 text-sm"
               />
               <button
                 onClick={() => handleApiKeySave(apiKey)}
@@ -630,7 +630,7 @@ export const Codex: Story = {
         )}
         
         {terminalReady && (
-          <div className="border rounded-md overflow-hidden bg-black">
+          <div className="overflow-hidden bg-black">
             <WebTerminal
               webContainer={webContainer}
               height={400}
@@ -1164,6 +1164,8 @@ function FileBrowser() {
   const [fileContent, setFileContent] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [debugMessage, setDebugMessage] = useState<string>('');
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+  const [lastRefreshed, setLastRefreshed] = useState<string>('');
   
   // Use our new file operations hook
   const {
@@ -1180,26 +1182,74 @@ function FileBrowser() {
   // Load file tree when WebContainer is ready
   useEffect(() => {
     if (webContainer) {
-      refreshFiles();
+      refreshFiles(true);
+      
+      // For debugging - test a manual refresh after 3 seconds
+      setTimeout(() => {
+        console.log('Testing manual refresh after timeout');
+        refreshFiles(false);
+      }, 3000);
     }
   }, [webContainer]);
 
-  // Refresh files
-  const refreshFiles = async () => {
-    setLoading(true);
+  // Create a stable reference to the refresh function using useCallback
+  const handleAutoRefresh = useCallback(async () => {
     try {
+      console.log('Auto-refresh callback invoked');
+      if (webContainer) {
+        console.log('WebContainer available, building file tree directly');
+        const tree = await buildFileTree();
+        console.log('Auto-refresh: tree built successfully', { treeLength: tree.length });
+        setFileTree(tree);
+        setLastRefreshed(new Date().toLocaleTimeString());
+      } else {
+        console.warn('WebContainer not available for auto-refresh');
+      }
+    } catch (error) {
+      console.error('Error in auto-refresh:', error);
+    }
+  }, [webContainer, buildFileTree]);
+
+  // For testing - trigger auto-refresh manually
+  const triggerManualAutoRefresh = () => {
+    console.log('Manually triggering auto-refresh function');
+    handleAutoRefresh();
+  };
+
+  // Refresh files
+  const refreshFiles = async (isManualRefresh = false) => {
+    if (isManualRefresh) {
+      console.log('Manual refresh initiated');
+      setLoading(true);
+    } else {
+      console.log('Background auto-refresh initiated');
+    }
+    
+    try {
+      console.log('Building file tree...');
       const tree = await buildFileTree();
+      console.log('File tree built successfully', { treeLength: tree.length });
       setFileTree(tree);
       
       // If no paths are expanded yet, expand the root
       if (!expandedPaths.includes('/')) {
         setExpandedPaths(['/']);
       }
+      
+      // Update the last refreshed timestamp
+      const timestamp = new Date().toLocaleTimeString();
+      console.log('Refresh completed at', timestamp);
+      setLastRefreshed(timestamp);
     } catch (err) {
       console.error('Error building file tree:', err);
       setDebugMessage(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
+      if (isManualRefresh) {
+        console.log('Manual refresh completed, hiding loader');
+        setLoading(false);
+      } else {
+        console.log('Background refresh completed');
+      }
     }
   };
 
@@ -1222,7 +1272,14 @@ function FileBrowser() {
   const handleSaveFile = async () => {
     if (selectedPaths.length > 0) {
       await saveFile(selectedPaths[0], fileContent);
+      // Refresh files after saving to update any changes
+      refreshFiles(false);
     }
+  };
+
+  // Toggle auto-refresh setting
+  const toggleAutoRefresh = () => {
+    setAutoRefreshEnabled(prev => !prev);
   };
 
   return (
@@ -1231,19 +1288,40 @@ function FileBrowser() {
         {/* File Browser Panel */}
         <ActionCard 
           title="File Browser" 
-          description={`${filesystemIds.length} filesystem(s) mounted`}
+          description={`${filesystemIds.length} filesystem(s) mounted${lastRefreshed ? ` - Last refreshed: ${lastRefreshed}` : ''}`}
           fullHeight
           className="col-span-1"
         >
-          <FileBrowserToolbar
-            webContainer={webContainer}
-            selectedPaths={selectedPaths}
-            onRefresh={refreshFiles}
-            isLoading={loading}
-            onFileCreated={() => refreshFiles()}
-            onDirectoryCreated={() => refreshFiles()}
-            onDelete={() => refreshFiles()}
-          />
+          <div className="flex items-center justify-between px-2 py-1 bg-gray-100 dark:bg-zinc-900">
+            <FileBrowserToolbar
+              webContainer={webContainer}
+              selectedPaths={selectedPaths}
+              onRefresh={() => refreshFiles(true)}
+              isLoading={loading}
+              onFileCreated={() => refreshFiles(true)}
+              onDirectoryCreated={() => refreshFiles(true)}
+              onDelete={() => refreshFiles(true)}
+            />
+            
+            <div className="flex items-center ml-2 gap-2">
+              <label className="flex items-center text-xs cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoRefreshEnabled}
+                  onChange={toggleAutoRefresh}
+                  className="mr-1"
+                />
+                Auto-refresh
+              </label>
+              
+              <button 
+                onClick={triggerManualAutoRefresh}
+                className="px-2 py-1 text-xs bg-blue-500 text-white rounded"
+              >
+                Test Auto-refresh
+              </button>
+            </div>
+          </div>
           
           {loading ? (
             <LoadingIndicator message="Loading files..." variant="spinner" className="m-4" />
@@ -1255,6 +1333,9 @@ function FileBrowser() {
                 expandedPaths={expandedPaths}
                 onSelectionChange={handleFileSelection}
                 onExpandedChange={setExpandedPaths}
+                refreshInterval={5000}
+                onRefresh={handleAutoRefresh}
+                showAutoRefreshIndicator={false}
               />
             </div>
           )}
@@ -1318,7 +1399,9 @@ export const IntegratedWebContainer: Story = {
     const [expandedPaths, setExpandedPaths] = useState<string[]>(['/']);
     const [fileContent, setFileContent] = useState<string>('');
     const [loading, setLoading] = useState(false);
-
+    const [lastRefreshed, setLastRefreshed] = useState('');
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+    
     const {
       buildFileTree,
       loadFile,
@@ -1329,20 +1412,59 @@ export const IntegratedWebContainer: Story = {
 
     const [fileTree, setFileTree] = useState<any[]>([]);
 
+    // Initial file tree loading
     useEffect(() => {
       if (webContainer) {
         refreshFiles();
       }
     }, [webContainer]);
+    
+    // Set up auto-refresh
+    useEffect(() => {
+      if (!webContainer || !autoRefreshEnabled) return;
+      
+      console.log('Setting up auto-refresh interval');
+      const intervalId = setInterval(() => {
+        console.log('Auto-refresh triggered');
+        // Silent refresh without loading indicator
+        silentRefresh();
+      }, 5000);
+      
+      return () => {
+        console.log('Cleaning up auto-refresh interval');
+        clearInterval(intervalId);
+      };
+    }, [webContainer, autoRefreshEnabled]);
 
+    // Silent refresh without loading indicator
+    const silentRefresh = async () => {
+      if (!webContainer) return;
+      
+      try {
+        console.log('Silent refresh: Building file tree...');
+        const tree = await buildFileTree();
+        console.log('Silent refresh: File tree built', { treeLength: tree.length });
+        setFileTree(tree);
+        setLastRefreshed(new Date().toLocaleTimeString());
+      } catch (err) {
+        console.error('Error in silent refresh:', err);
+      }
+    };
+
+    // Regular refresh with loading indicator
     const refreshFiles = async () => {
       setLoading(true);
       try {
+        console.log('Manual refresh: Building file tree...');
         const tree = await buildFileTree();
+        console.log('Manual refresh: File tree built', { treeLength: tree.length });
         setFileTree(tree);
+        
         if (!expandedPaths.includes('/')) {
           setExpandedPaths(['/']);
         }
+        
+        setLastRefreshed(new Date().toLocaleTimeString());
       } catch (err) {
         console.error('Error building file tree:', err);
       } finally {
@@ -1365,6 +1487,8 @@ export const IntegratedWebContainer: Story = {
     const handleSaveFile = async () => {
       if (selectedPaths.length > 0) {
         await saveFile(selectedPaths[0], fileContent);
+        // Refresh tree after saving
+        silentRefresh();
       }
     };
 
@@ -1375,19 +1499,36 @@ export const IntegratedWebContainer: Story = {
     const handleTerminalError = (error: any) => {
       setTerminalMessage(`Error: ${error.message || String(error)}`);
     };
+    
+    // Toggle auto-refresh
+    const toggleAutoRefresh = () => {
+      setAutoRefreshEnabled(prev => !prev);
+    };
 
     return (
       <div className="h-screen w-full bg-[#1e1e1e] text-white overflow-hidden">
         <div className="h-6 bg-[#323233] flex items-center px-2 text-sm">
           <span className="text-gray-400">WebContainer IDE</span>
+          {lastRefreshed && (
+            <span className="text-gray-500 text-xs ml-2">Last refreshed: {lastRefreshed}</span>
+          )}
         </div>
         
         <ResizablePanelGroup direction="horizontal">
           {/* File Explorer Panel */}
           <ResizablePanel defaultSize={20} minSize={15}>
             <div className="h-full bg-[#252526] flex flex-col">
-              <div className="p-2 text-sm font-medium border-b border-[#323233]">
-                EXPLORER
+              <div className="p-2 text-sm font-medium border-b border-[#323233] flex justify-between items-center">
+                <span>EXPLORER</span>
+                <label className="flex items-center text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autoRefreshEnabled}
+                    onChange={toggleAutoRefresh}
+                    className="mr-1 h-3 w-3"
+                  />
+                  <span className="text-xs">Auto-refresh</span>
+                </label>
               </div>
               <div className="flex-1 overflow-auto">
                 <FileBrowserToolbar
@@ -1401,7 +1542,7 @@ export const IntegratedWebContainer: Story = {
                   className="border-b border-[#323233] p-2"
                 />
                 {loading ? (
-                  <LoadingIndicator message="Loading..." variant="spinner" className="m-4" />
+                  <LoadingIndicator message="Loading files..." variant="spinner" className="m-4" />
                 ) : (
                   <div className="p-2">
                     <FileSystemTree
@@ -1410,6 +1551,9 @@ export const IntegratedWebContainer: Story = {
                       expandedPaths={expandedPaths}
                       onSelectionChange={handleFileSelection}
                       onExpandedChange={setExpandedPaths}
+                      refreshInterval={autoRefreshEnabled ? 5000 : 0}
+                      onRefresh={() => refreshFiles()}
+                      showAutoRefreshIndicator={false}
                     />
                   </div>
                 )}
