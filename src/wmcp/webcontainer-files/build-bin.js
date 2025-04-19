@@ -104,38 +104,6 @@ node ${filePath} "$@"
   }
 }
 
-// Create an .npmrc file to ensure binaries are linked properly
-try {
-  const npmrcPath = path.resolve(process.cwd(), '.npmrc');
-  const npmrcContent = 'prefix = ${HOME}/.npm-global\n';
-  fs.writeFileSync(npmrcPath, npmrcContent);
-  console.log(`Created .npmrc file at ${npmrcPath}`);
-} catch (error) {
-  console.error(`Failed to create .npmrc file:`, error.message);
-}
-
-// Create a .profile or .bashrc to update PATH
-try {
-  const profilePath = path.resolve(process.cwd(), '.profile');
-  const profileContent = `
-# Add npm bin directories to PATH
-export PATH="$PATH:${path.resolve(process.cwd(), 'node_modules/.bin')}:$HOME/.npm-global/bin"
-`;
-  fs.writeFileSync(profilePath, profileContent);
-  console.log(`Created .profile file at ${profilePath}`);
-  
-  // Try to source the profile immediately
-  try {
-    execSync(`export PATH="$PATH:${path.resolve(process.cwd(), 'node_modules/.bin')}:$HOME/.npm-global/bin"`);
-    console.log('Updated PATH environment variable.');
-  } catch (error) {
-    console.error('Failed to update PATH:', error.message);
-  }
-} catch (error) {
-  console.error(`Failed to create .profile file:`, error.message);
-}
-
-console.log('All binary files processed.');
 console.log('Current directory contents:');
 try {
   const contents = execSync('ls -la').toString();

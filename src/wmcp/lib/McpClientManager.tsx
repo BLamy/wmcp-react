@@ -31,7 +31,24 @@ export type ServerConfig = {
       this.webContainer = webContainer;
     }
   
-    // Initialize the MCP client manager with server configurations
+    // Add a method to check if WebContainer is ready
+    async isWebContainerReady(): Promise<boolean> {
+      if (!this.webContainer) {
+        console.error('WebContainer is not available');
+        return false;
+      }
+  
+      // Check if the file system is accessible
+      try {
+        await this.webContainer.fs.readdir('/');
+        return true;
+      } catch (error) {
+        console.error('WebContainer filesystem is not ready:', error);
+        return false;
+      }
+    }
+  
+    // Update the initialize method with better checks
     async initialize(serverConfigs: Record<string, ServerConfig>): Promise<void> {
       if (this.isInitialized) {
         console.warn('MCP Client Manager already initialized');
@@ -43,7 +60,13 @@ export type ServerConfig = {
       }
   
       try {
-        // console.log('Initializing MCP Client Manager...');
+        // Verify WebContainer is ready before proceeding
+        const isReady = await this.isWebContainerReady();
+        if (!isReady) {
+          throw new Error('WebContainer is not fully initialized and ready for MPC servers');
+        }
+        
+        console.log('Initializing MCP Client Manager with WebContainer verification passed');
         
         // Store server configurations
         for (const [serverName, config] of Object.entries(serverConfigs)) {
@@ -54,10 +77,11 @@ export type ServerConfig = {
         const connectPromises = Object.entries(serverConfigs).map(
           async ([serverName, config]) => {
             try {
+              console.log(`Attempting to connect to server ${serverName} with config:`, config);
               await this.connectToServer(serverName, config);
               return true;
             } catch (error) {
-              // console.error(`Failed to connect to server ${serverName}:`, error);
+              console.error(`Failed to connect to server ${serverName}:`, error);
               return false;
             }
           }
@@ -75,9 +99,9 @@ export type ServerConfig = {
         await this.mapToolsAndResources(); 
         
         this.isInitialized = true;
-        // console.log('MCP Client Manager initialized successfully');
+        console.log('MCP Client Manager initialized successfully');
       } catch (error) {
-        // console.error(`Failed to initialize MCP Client Manager:`, error);
+        console.error(`Failed to initialize MCP Client Manager:`, error);
         throw error;
       }
     }

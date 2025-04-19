@@ -89,23 +89,18 @@ export function FileSystemTree({
     if (intervalIdRef.current) {
       window.clearInterval(intervalIdRef.current);
       intervalIdRef.current = null;
-      console.log('Cleared previous interval');
     }
     
     if (!refreshInterval || !onRefresh || refreshInterval < 1000) {
-      console.log('Auto-refresh disabled or invalid config:', { refreshInterval, hasOnRefresh: !!onRefresh });
       return;
     }
     
-    console.log('Setting up auto-refresh with interval:', refreshInterval);
     
     const doRefresh = async () => {
       if (isRefreshing || !isMounted.current) {
-        console.log('Skipping refresh - already refreshing or unmounted');
         return;
       }
       
-      console.log('Auto-refresh triggered');
       
       // Only show loading UI if explicitly requested
       if (showAutoRefreshIndicator) {
@@ -114,7 +109,6 @@ export function FileSystemTree({
       
       try {
         await Promise.resolve(onRefresh());
-        console.log('Auto-refresh completed successfully');
       } catch (err) {
         console.error('Error in background refresh:', err);
       } finally {
@@ -125,22 +119,17 @@ export function FileSystemTree({
     };
     
     // Start with immediate refresh
-    console.log('Running initial refresh');
     doRefresh();
     
     // Create the interval with the window object explicitly
-    console.log(`Setting interval to run every ${refreshInterval}ms`);
     const id = window.setInterval(() => {
-      console.log('Interval fired, calling doRefresh');
       doRefresh();
     }, refreshInterval);
     
     // Store the interval ID
     intervalIdRef.current = id;
-    console.log('Interval ID set:', id);
     
     return () => {
-      console.log('Cleaning up auto-refresh interval');
       if (intervalIdRef.current) {
         window.clearInterval(intervalIdRef.current);
         intervalIdRef.current = null;

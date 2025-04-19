@@ -44,42 +44,117 @@ export function useMCPServer(props: { mcpServers: Record<string, ServerConfig> }
     // Initialize the client manager
     useEffect(() => {
       if (!webContainer) {
+        console.warn('MCP Server: No WebContainer context available');
         setStatus('NO_WEBCONTAINER_CONTEXT');
         return;
       }
       
+      // Only proceed if we have servers configured
+      if (Object.keys(props.mcpServers).length === 0) {
+        console.log('MCP Server: No servers configured, skipping initialization');
+        return;
+      }
+      
+      console.log('MCP Server: Starting initialization with configs:', props.mcpServers);
       setStatus('STARTING');
       
-      const initializeClientManager = async () => {
+      // Add a delay to ensure WebContainer is fully initialized
+      const delayMs = 2000;
+      console.log(`MCP Server: Delaying initialization for ${delayMs}ms to ensure WebContainer is ready`);
+      
+      const initTimer = setTimeout(async () => {
         try {
           // Create new client manager
+          console.log('MCP Server: Creating client manager with WebContainer', webContainer);
           const clientManager = new MCPClientManager(webContainer);
           clientManagerRef.current = clientManager;
           
-          // Initialize with modified server configs
-          await clientManager.initialize({ ...props.mcpServers });
+          // Initialize with retries
+          let success = false;
+          let attempt = 0;
+          const maxAttempts = 3;
           
-          // Load initial data
-          const toolsList = await clientManager.listAllTools();
-          const resourcesList = await clientManager.listAllResources();
+          while (!success && attempt < maxAttempts) {
+            attempt++;
+            console.log(`MCP Server: Initialization attempt ${attempt}/${maxAttempts}`);
+            
+            try {
+              // Initialize with modified server configs
+              console.log('MCP Server: Attempting to initialize with server configs', props.mcpServers);
+              await clientManager.initialize({ ...props.mcpServers });
+              success = true;
+            } catch (initError) {
+              console.error(`MCP Server: Initialization attempt ${attempt} failed:`, initError);
+              
+              if (attempt === maxAttempts) {
+                throw initError;
+              }
+              
+              // Wait before retrying
+              await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+          }
           
-          setTools(toolsList);
-          setResources(resourcesList);
-          setStatus('READY');
+          if (success) {
+            // Load initial data
+            console.log('MCP Server: Server initialized successfully, loading tools and resources');
+            try {
+              const toolsList = await clientManager.listAllTools();
+              console.log('MCP Server: Loaded tools:', toolsList);
+              setTools(toolsList);
+            } catch (toolsError) {
+              console.warn('MCP Server: Failed to load tools:', toolsError);
+              // Continue even if tools fail to load
+            }
+            
+            try {
+              const resourcesList = await clientManager.listAllResources();
+              console.log('MCP Server: Loaded resources:', resourcesList);
+              setResources(resourcesList);
+            } catch (resourcesError) {
+              console.warn('MCP Server: Failed to load resources:', resourcesError);
+              // Continue even if resources fail to load
+            }
+            
+            setStatus('READY');
+            console.log('MCP Server: Initialization complete, status set to READY');
+          }
         } catch (err) {
-          // console.error('Failed to initialize MCP Client Manager:', err);
-          setError(err as Error);
+          console.error('MCP Server: Failed to initialize client manager:', err);
+          let errorMessage = 'Unknown error initializing MCP servers';
+          
+          if (err instanceof Error) {
+            console.error('MCP Server: Error details:', err.message);
+            console.error('MCP Server: Error stack:', err.stack);
+            errorMessage = err.message;
+            setError(err);
+          } else {
+            setError(new Error(errorMessage));
+          }
+          
+          // Make the error more user-friendly
+          if (errorMessage.includes('ENOENT')) {
+            errorMessage = 'Server executable not found. The MPC server package may not be installed.';
+          } else if (errorMessage.includes('EACCES')) {
+            errorMessage = 'Permission denied when starting the server.';
+          } else if (errorMessage.includes('timeout')) {
+            errorMessage = 'Server connection timed out. The server may be taking too long to start.';
+          }
+          
+          console.error('MCP Server: User-friendly error:', errorMessage);
           setStatus('ERROR');
         }
-      };
-      
-      initializeClientManager();
+      }, delayMs);
       
       // Cleanup function
       return () => {
+        console.log('MCP Server: Cleaning up initialization');
+        clearTimeout(initTimer);
+        
+        console.log('MCP Server: Disconnecting servers if connected');
         if (clientManagerRef.current) {
           clientManagerRef.current.disconnectAll().catch(err => {
-            console.error('Error disconnecting MCP servers:', err);
+            console.error('MCP Server: Error disconnecting MPC servers:', err);
           });
         }
       };

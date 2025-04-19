@@ -42,7 +42,7 @@ export interface BaseMessage {
 // User text message
 export interface UserTextMessage extends BaseMessage {
   type: "user_message";
-  content: string;
+  content: string | ContentBlock[];
 }
 
 // Assistant text message
@@ -68,9 +68,13 @@ export interface ToolResultMessage extends BaseMessage {
 export type Message = UserTextMessage | AssistantTextMessage | ToolCallMessage | ToolResultMessage;
 
 // For Anthropic API message format
+export type ContentBlock = 
+  | { type: "text"; text: string }
+  | { type: "image"; source: { type: "base64"; media_type: string; data: string } };
+
 export type AnthropicMessage = {
   role: "user" | "assistant";
-  content: any;
+  content: string | ContentBlock[];
 };
 
 export type CallLLMFunction = (
@@ -330,10 +334,19 @@ export function useWebContainerAgent({
   tools = DEFAULT_TOOLS,
 }: UseWebContainerAgentProps) {
   const { webContainer } = useContext(WebContainerContext);
-  const [activeFile, setActiveFile] = useState<string | null>(null);
-  const [loading, setLoading] = useState(isLoading);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [testResults, setTestResults] = useState<any>({});
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: "1",
+      type: "assistant_message",
+      content: "Hello! I'm your coding assistant. How can I help you today?",
+      timestamp: new Date(),
+    },
+  ]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const conversationInProgress = useRef(false);
+  const messageQueue = useRef<(string | ContentBlock[])[]>([]);
+  const testResults = useRef<any>(null);
+  const currentFileRef = useRef<string | null>(null);
 
   const isDirectory = async (path: string): Promise<boolean> => {
     try {
@@ -355,106 +368,68 @@ export function useWebContainerAgent({
       return false;
     }
   };
-  // Refs to track conversation state
-  const conversationInProgress = useRef(false);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const messageQueue = useRef<string[]>([]);
-  
-  // Effect to process message queue
-  useEffect(() => {
-    const processQueue = async () => {
-      if (messageQueue.current.length > 0 && !conversationInProgress.current) {
-        const nextMessage = messageQueue.current.shift();
-        if (nextMessage) {
-          await processUserMessage(nextMessage);
-        }
-      }
-    };
-    
-    processQueue();
-  }, [loading, messages]);
-  
-  // Function to scroll to bottom of messages
-  const scrollToBottom = () => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
-  
-  // Effect to scroll messages into view when they change
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
 
-  // Convert our custom message types to Anthropic API format
   const formatMessagesForAPI = (messagesToFormat: Message[]): AnthropicMessage[] => {
     const formattedMessages: AnthropicMessage[] = [];
-    
-    // Process all messages in sequence
-    for (let i = 0; i < messagesToFormat.length; i++) {
-      const msg = messagesToFormat[i];
-      
-      switch(msg.type) {
-        case "user_message":
-          formattedMessages.push({
-            role: "user",
-            content: msg.content
-          });
-          break;
-          
-        case "assistant_message":
-          formattedMessages.push({
-            role: "assistant",
-            content: msg.content
-          });
-          break;
-          
-        case "tool_call":
-          // Add tool call to assistant's messages
-          formattedMessages.push({
-            role: "assistant",
-            content: [
-              {
-                type: "tool_use",
-                id: msg.toolCall.id,
-                name: msg.toolCall.name,
-                input: msg.toolCall.arguments
-              }
-            ]
-          });
-          break;
-          
-        case "tool_result":
-          // Add tool result to user's messages
-          formattedMessages.push({
-            role: "user",
-            content: [
-              {
-                type: "tool_result",
-                tool_use_id: msg.toolCallId,
-                content: typeof msg.result === "string" 
-                  ? msg.result
-                  : JSON.stringify(msg.result)
-              }
-            ]
-          });
-          break;
+    let currentRole: "user" | "assistant" | null = null;
+    let currentContent: string | ContentBlock[] = "";
+    let isContentArray = false;
+
+    // Helper to add the current message and reset
+    const addMessage = () => {
+      if (currentRole && (typeof currentContent === "string" ? currentContent.trim() : currentContent.length > 0)) {
+        formattedMessages.push({
+          role: currentRole,
+          content: currentContent
+        });
+      }
+      currentContent = "";
+      isContentArray = false;
+    };
+
+    for (const message of messagesToFormat) {
+      // Skip tool calls and tool results in the conversation history
+      if (message.type === "tool_call" || message.type === "tool_result") {
+        continue;
+      }
+
+      const role: "user" | "assistant" = message.type === "user_message" ? "user" : "assistant";
+
+      // If role changed, push previous message
+      if (currentRole !== role) {
+        addMessage();
+        currentRole = role;
+      }
+
+      // Special case for array content (multipart messages with images)
+      if (typeof message.content !== "string" && Array.isArray(message.content)) {
+        // If we have an array of content blocks, just use it directly
+        currentContent = message.content as ContentBlock[];
+        isContentArray = true;
+      } else if (!isContentArray) {
+        // Only append if current content is not an array
+        // For string content, concatenate with a newline if needed
+        if (typeof currentContent === "string") {
+          currentContent = currentContent ? `${currentContent}\n${message.content}` : message.content;
+        }
       }
     }
-    
+
+    // Add the last message
+    addMessage();
+
     return formattedMessages;
   };
 
-  // Process a user message and handle the full conversation flow
-  const processUserMessage = async (userMessage: string) => {
+  const processUserMessage = async (userMessage: string | ContentBlock[]) => {
     try {
       if (!webContainer) {
-        throw new Error("WebContainer not initialized");
+        throw new Error("WebContainer is not available");
       }
-      
+
       conversationInProgress.current = true;
       
-      // Add user message
+      // Create user message object
       const userMessageObj: UserTextMessage = {
         id: generateId(),
         type: "user_message",
@@ -462,264 +437,122 @@ export function useWebContainerAgent({
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, userMessageObj]);
-      setLoading(true);
-
-      // Get current file content if there's an active file
-      let currentFileContent = "";
-      if (activeFile) {
-        try {
-          currentFileContent = await webContainer.fs.readFile(activeFile, 'utf-8');
-        } catch (error) {
-          console.error(`Error reading active file ${activeFile}:`, error);
-        }
-      }
-
-      // Get list of available files
-      let availableFiles: string[] = [];
+      // Add user message to messages
+      setMessages(prev => [...prev, userMessageObj]);
+      
+      // Get the current list of messages, including the new user message
+      const currentMessages = [...messages, userMessageObj];
+      
+      // Format messages for the API
+      const formattedMessages = formatMessagesForAPI(currentMessages);
+      
+      // Call the LLM
+      let response;
       try {
-        const recursiveListFiles = async (dir: string = '/'): Promise<string[]> => {
-          const dirEntries = await webContainer.fs.readdir(dir);
-          let files: string[] = [];
-          
-          for (const entry of dirEntries) {
-            if (entry === 'node_modules' || entry === '.git') continue;
-            
-            const fullPath = dir === '/' ? `/${entry}` : `${dir}/${entry}`;
-            
-            try {
-              // const stats = await webContainer.fs.stat();
-              
-              if (await isDirectory(fullPath)) {
-                files = files.concat(await recursiveListFiles(fullPath));
-              } else {
-                files.push(fullPath);
-              }
-            } catch (error) {
-              console.error(`Error getting stats for ${fullPath}:`, error);
-            }
-          }
-          
-          return files;
-        };
-        
-        availableFiles = await recursiveListFiles();
+        response = await callLLM(
+          formattedMessages,
+          systemPrompt,
+          tools
+        );
       } catch (error) {
-        console.error("Error listing files:", error);
+        console.error("Error calling LLM:", error);
+        throw error;
       }
-
-      // Format messages for Anthropic API
-      const formattedMessages = formatMessagesForAPI(messages.concat(userMessageObj));
-
-      // Create context about the current state
-      const contextInfo = `
-Current file: ${activeFile || "None"}
-Available files: ${availableFiles.join(", ")}
-${
-  activeFile && currentFileContent
-    ? `Current file content:
-\`\`\`
-${currentFileContent}
-\`\`\``
-    : ""
-}
-`;
-
-      // Call LLM with the provided function
-      const fullSystemPrompt = systemPrompt + "\n\n" + contextInfo;
-      const data = await callLLM(formattedMessages, fullSystemPrompt, tools);
-
-      // Extract the assistant's response
-      let assistantContent = "";
-      const toolCalls = [];
-
-      // Handle different response formats
-      if (data && data.content) {
-        // Find text content and tool use
-        for (const contentItem of data.content) {
-          if ((contentItem as any).type === "text") {
-            assistantContent = (contentItem as any).text || "";
-          } else if ((contentItem as any).type === "tool_use") {
-            const toolCall = {
-              id: (contentItem as any).id || `tool-${generateId()}`,
-              name: (contentItem as any).name || (contentItem as any).tool_use?.name,
-              input: (contentItem as any).input || (contentItem as any).tool_use?.input || {},
+      
+      // Process the response
+      if (response.content && Array.isArray(response.content)) {
+        for (const contentItem of response.content) {
+          if (contentItem.type === "text") {
+            // Handle text content
+            const assistantMessage: AssistantTextMessage = {
+              id: generateId(),
+              type: "assistant_message",
+              content: contentItem.text,
+              timestamp: new Date(),
             };
-            toolCalls.push(toolCall);
+            setMessages(prev => [...prev, assistantMessage]);
+          } else if (contentItem.type === "tool_use") {
+            // Handle tool use
+            const toolCall: ToolCall = {
+              id: contentItem.id,
+              name: contentItem.name,
+              arguments: contentItem.input,
+            };
+            
+            const toolCallMessage: ToolCallMessage = {
+              id: generateId(),
+              type: "tool_call",
+              toolCall,
+              timestamp: new Date(),
+            };
+            
+            setMessages(prev => [...prev, toolCallMessage]);
+            
+            // Execute the tool and get the result
+            const result = await handleToolCall(contentItem.name, contentItem.input);
+            
+            // Create tool result message
+            const toolResultMessage: ToolResultMessage = {
+              id: generateId(),
+              type: "tool_result",
+              toolCallId: contentItem.id,
+              result,
+              timestamp: new Date(),
+            };
+            
+            setMessages(prev => [...prev, toolResultMessage]);
           }
         }
-      } else {
-        // Fallback for unexpected response format
-        assistantContent = "Received a response in an unexpected format.";
-      }
-
-      // Create the assistant message if there's text content
-      if (assistantContent) {
+      } else if (typeof response.content === "string") {
+        // Handle simple text response
         const assistantMessage: AssistantTextMessage = {
           id: generateId(),
           type: "assistant_message",
-          content: assistantContent,
+          content: response.content,
           timestamp: new Date(),
         };
-
-        // Add the assistant message to the UI
-        setMessages((prev) => [...prev, assistantMessage]);
-      }
-
-      // Process all tool calls
-      if (toolCalls.length > 0) {
-        await processToolCalls(toolCalls, messages.concat(userMessageObj), fullSystemPrompt);
+        setMessages(prev => [...prev, assistantMessage]);
       }
     } catch (error) {
-      console.error("Error calling LLM:", error);
-
+      console.error("Error in processUserMessage:", error);
+      
       // Add error message
       const errorMessage: AssistantTextMessage = {
         id: generateId(),
         type: "assistant_message",
-        content: `Error: ${
-          error instanceof Error ? error.message : "Failed to get response"
-        }. Please check your settings and try again.`,
+        content: `Error: ${error instanceof Error ? error.message : "An unknown error occurred"}`,
         timestamp: new Date(),
       };
-
-      setMessages((prev) => [...prev, errorMessage]);
+      
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
-      setLoading(false);
       conversationInProgress.current = false;
       
       // Process next message in queue if any
       if (messageQueue.current.length > 0) {
         const nextMessage = messageQueue.current.shift();
         if (nextMessage) {
-          await processUserMessage(nextMessage);
+          setTimeout(() => processUserMessage(nextMessage), 100);
         }
       }
     }
   };
-  
-  // Helper function to process a list of tool calls
-  const processToolCalls = async (
-    toolCalls: Array<{id: string, name: string, input: any}>,
-    previousMessages: Message[],
-    fullSystemPrompt: string
-  ) => {
-    let updatedMessages = [...previousMessages];
-    
-    for (const toolCall of toolCalls) {
-      // Create a tool call message
-      const toolCallMessage: ToolCallMessage = {
-        id: generateId(),
-        type: "tool_call",
-        timestamp: new Date(),
-        toolCall: {
-          id: toolCall.id,
-          name: toolCall.name,
-          arguments: toolCall.input,
-        },
-      };
 
-      // Add the tool call message to the UI messages
-      setMessages((prev) => [...prev, toolCallMessage]);
-      updatedMessages = [...updatedMessages, toolCallMessage];
-
-      try {
-        // Execute the tool
-        const toolResult = await handleToolCall(
-          toolCall.name,
-          toolCall.input
-        );
-        
-        // Create the tool result message
-        const toolResultMessage: ToolResultMessage = {
-          id: generateId(),
-          type: "tool_result",
-          timestamp: new Date(),
-          toolCallId: toolCall.id,
-          result: toolResult
-        };
-        
-        // Add the tool result message to the UI
-        setMessages((prev) => [...prev, toolResultMessage]);
-        updatedMessages = [...updatedMessages, toolResultMessage];
-        
-        // Get response after tool execution
-        const formattedMessagesForAPI = formatMessagesForAPI(updatedMessages);
-        const responseAfterTool = await callLLM(
-          formattedMessagesForAPI,
-          fullSystemPrompt,
-          tools
-        );
-        
-        // Extract response text and any new tool calls
-        let responseText = "";
-        const newToolCalls = [];
-        
-        if (responseAfterTool && responseAfterTool.content) {
-          for (const item of responseAfterTool.content) {
-            if ((item as any).type === "text") {
-              responseText = (item as any).text || "";
-            } else if ((item as any).type === "tool_use") {
-              const newToolCall = {
-                id: (item as any).id || `tool-${generateId()}`,
-                name: (item as any).name || (item as any).tool_use?.name,
-                input: (item as any).input || (item as any).tool_use?.input || {},
-              };
-              newToolCalls.push(newToolCall);
-            }
-          }
-        }
-        
-        if (responseText) {
-          // Add response message
-          const responseMessage: AssistantTextMessage = {
-            id: generateId(),
-            type: "assistant_message",
-            content: responseText,
-            timestamp: new Date(),
-          };
-          
-          setMessages((prev) => [...prev, responseMessage]);
-          updatedMessages = [...updatedMessages, responseMessage];
-        }
-        
-        // Recursively process any new tool calls
-        if (newToolCalls.length > 0) {
-          await processToolCalls(newToolCalls, updatedMessages, fullSystemPrompt);
-        }
-      } catch (error: any) {
-        console.error(`Error executing tool ${toolCall.name}:`, error);
-
-        // Create an error result
-        const errorResult: ToolResult = {
-          status: "error",
-          error: `Failed to execute tool: ${error.message || String(error)}`,
-        };
-        
-        // Create an error message
-        const toolResultMessage: ToolResultMessage = {
-          id: generateId(),
-          type: "tool_result",
-          timestamp: new Date(),
-          toolCallId: toolCall.id,
-          result: errorResult
-        };
-        
-        // Add the error message to the UI
-        setMessages((prev) => [...prev, toolResultMessage]);
-        updatedMessages = [...updatedMessages, toolResultMessage];
-      }
-    }
-  };
-
-  const sendMessage = async (userMessage: string) => {
+  const sendMessage = async (userMessage: string | ContentBlock[]) => {
     // If there's already a conversation in progress, queue the message
     if (conversationInProgress.current) {
       messageQueue.current.push(userMessage);
       return;
     }
     
-    await processUserMessage(userMessage);
+    setIsProcessing(true);
+    try {
+      await processUserMessage(userMessage);
+    } catch (error) {
+      console.error("Error processing user message:", error);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   // The tool handling is the key difference from useSandpackAgent - it uses WebContainer APIs
@@ -1079,7 +912,7 @@ ${currentFileContent}
           const { file_path, status } = input;
           
           // Return the cached test results, optionally filtered by file_path and status
-          let filteredResults = { ...testResults };
+          let filteredResults = { ...testResults.current };
           
           if (file_path) {
             filteredResults = Object.keys(filteredResults)
@@ -1175,12 +1008,12 @@ ${currentFileContent}
 
   // Method to update active file
   const setCurrentFile = (filePath: string | null) => {
-    setActiveFile(filePath);
+    currentFileRef.current = filePath;
   };
 
   // Method to update test results
   const updateTestResults = (results: any) => {
-    setTestResults(results);
+    testResults.current = results;
   };
 
   return {
@@ -1188,11 +1021,11 @@ ${currentFileContent}
     setMessages,
     sendMessage,
     clearMessages,
-    isLoading: loading,
-    messagesEndRef,
-    testResults,
+    isLoading: isProcessing,
+    messagesEndRef: null,
+    testResults: testResults.current,
     updateTestResults,
     setCurrentFile,
-    activeFile
+    activeFile: currentFileRef.current
   };
 }

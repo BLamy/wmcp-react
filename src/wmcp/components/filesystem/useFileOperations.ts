@@ -180,8 +180,8 @@ export function useFileOperations(webContainer: WebContainer | null): FileOperat
       return [];
     }
 
-    setIsLoading(true);
-    setError(null);
+    // setIsLoading(true);
+    // setError(null);
 
     try {
       // Define our own file tree structure that's compatible with the component
