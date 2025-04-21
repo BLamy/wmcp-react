@@ -97,7 +97,7 @@
     "framer-motion": "^12.5.0",
     "isomorphic-git": "^1.30.1",
     "lexical": "^0.28.0",
-    "lucide-react": "^0.292.0",
+    "lucide-react": "^0.503.0",
     "postcss": "^8.4.31",
     "react": "^19.1.0",
     "react-aria-components": "^1.7.1",
