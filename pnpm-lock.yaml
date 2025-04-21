@@ -247,7 +247,7 @@ importers:
         specifier: ^2.0.1
         version: 2.0.1(@storybook/client-logger@7.6.20)(@storybook/preview-api@8.6.12(storybook@8.6.12))(@storybook/react@8.6.12(@storybook/test@8.6.12(storybook@8.6.12))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(storybook@8.6.12)(typescript@5.3.3))(@storybook/types@7.6.20)(react@19.1.0)
       '@tailwindcss/postcss':
-        specifier: ^4.0.14
+        specifier: ^4.1.4
         version: 4.1.4
       '@testing-library/jest-dom':
         specifier: ^6.6.3
