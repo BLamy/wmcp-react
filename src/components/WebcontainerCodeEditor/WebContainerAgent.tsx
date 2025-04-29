@@ -13,7 +13,12 @@ import {
   Settings,
   X,
   Server,
-  AlertCircle
+  AlertCircle,
+  SlashIcon,
+  AtSignIcon,
+  FileIcon,
+  FolderIcon,
+  Sparkles
 } from "lucide-react";
 import { FileTrigger, Button as AriaButton } from 'react-aria-components';
 import { MenuTrigger, Modal, ModalOverlay, Dialog, Heading } from 'react-aria-components';
@@ -55,7 +60,9 @@ import { ServerConfig } from "../../wmcp/lib/McpClientManager";
 import { MCPServerStatus, useMCPServer } from "../../wmcp/hooks/useMcpServer";
 import { Tool } from "@modelcontextprotocol/sdk/types";
 import { WebContainerContext } from "../../wmcp/providers/Webcontainer";
-import { MpcServerMenu } from "@/components/MpcServerMenu";
+import { MpcServerMenu } from "../../components/MpcServerMenu";
+import { PromptMenu, Prompt } from "../../components/PromptMenu";
+import { ResourceMenu, Resource } from "../../components/ResourceMenu";
 
 // Default MPC server configurations
 const DEFAULT_SERVER_CONFIGS: Record<string, ServerConfig> = {
@@ -417,36 +424,24 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const [isPromptMenuOpen, setIsPromptMenuOpen] = useState(false);
+  const [isResourceMenuOpen, setIsResourceMenuOpen] = useState(false);
+  
+  // Add state for selected prompts
+  const [selectedPrompts, setSelectedPrompts] = useState<Prompt[]>([]);
+  const [selectedResources, setSelectedResources] = useState<Resource[]>([]);
+  
   // Initialize MPC server connection
   const { 
     status: serverStatus,
     tools: mcpTools,
+    prompts: availablePrompts,
+    resources: availableResources,
     executeTool,
     toolToServerMap
   } = useMCPServer({
     mcpServers: activeServers
   });
-
-  // Register the MPC executeTool function globally so it can be accessed by the WebContainerAgent
-  useEffect(() => {
-    if (executeTool) {
-      console.log("Setting global mcpExecuteTool function");
-      window.mcpExecuteTool = executeTool;
-      
-      // For debugging
-      window.mcpExecuteTool("sequentialthinking", { thought: "Test thought", nextThoughtNeeded: true, thoughtNumber: 1, totalThoughts: 5 })
-        .then(result => console.log("Test MCP execution result:", result))
-        .catch(err => console.error("Test MCP execution error:", err));
-    }
-    
-    return () => {
-      // Clean up when component unmounts
-      if (window.mcpExecuteTool) {
-        console.log("Removing global mcpExecuteTool function");
-        delete window.mcpExecuteTool;
-      }
-    };
-  }, [executeTool]);
 
   // Add a state to track if WebContainer is ready
   const [webContainerReady, setWebContainerReady] = useState(false);
@@ -756,8 +751,9 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
     }
   }, [testResults, updateTestResults]);
 
+  // Update handleSendMessage to include selected prompts instead of tools
   const handleSendMessage = async () => {
-    if (!input.trim() && selectedFiles.length === 0) return;
+    if (!input.trim() && selectedFiles.length === 0 && selectedPrompts.length === 0 && selectedResources.length === 0) return;
     if (!apiKey || apiKey === "") {
       console.log("Anthropic API key is required");
       onRequestApiKey?.();
@@ -768,21 +764,18 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
     setInput("");
     
     try {
-      // Process all images before sending
+      // Create user content as an array
+      const userContent: ContentBlock[] = [];
+      
+      // Add images first if any
       if (selectedFiles.length > 0) {
-        // Only process image files
         const imageFiles = selectedFiles.filter(file => file.type.startsWith('image/'));
         
         if (imageFiles.length > 0) {
-          // Convert all images to base64 concurrently
           const processedImages = await Promise.all(
             imageFiles.map(file => processImage(file))
           );
           
-          // Format the content as multipart content following Anthropic's format
-          const userContent: ContentBlock[] = [];
-          
-          // Add all images first
           for (const img of processedImages) {
             userContent.push({
               type: "image",
@@ -793,26 +786,61 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
               }
             });
           }
-          
-          // Add the text content
-          if (currentInput.trim()) {
-            userContent.push({
-              type: "text",
-              text: currentInput
-            });
-          }
-          
-          // Clear selected files after sending
-          setSelectedFiles([]);
-          
-          // Send message with custom content format
-          await sendMessage(userContent);
-        } else {
-          // No image files, send as normal text
-          await sendMessage(currentInput);
         }
-      } else {
-        // No files, just send the text
+      }
+      
+      // Build message text with selected prompts and resources
+      let messageText = currentInput;
+      
+      // Add prompt templates if any
+      if (selectedPrompts.length > 0) {
+        // Get the content of the first prompt and add any additional ones as references
+        messageText = selectedPrompts[0].content + (messageText ? ` ${messageText}` : "");
+        
+        // If there are more than one prompt, add them as references
+        if (selectedPrompts.length > 1) {
+          const additionalPrompts = selectedPrompts.slice(1).map(prompt => 
+            `- Also consider: ${prompt.name}`
+          ).join('\n');
+          
+          messageText = `${messageText}\n\n${additionalPrompts}`;
+        }
+      }
+      
+      // Add resources information if any
+      if (selectedResources.length > 0) {
+        // Create resource content blocks
+        for (const resource of selectedResources) {
+          userContent.push({
+            type: "document",
+            title: resource.name,
+            source: {
+              type: "text",
+              media_type: resource.mimeType || "text/plain",
+              data: resource.text || "",
+              // uri: resource.uri || ""
+            }
+          });
+        }
+      }
+      
+      // Add text content if we have any
+      if (messageText.trim()) {
+        userContent.push({
+          type: "text",
+          text: messageText
+        });
+      }
+      
+      // Clear selections after sending
+      setSelectedFiles([]);
+      setSelectedPrompts([]);
+      setSelectedResources([]);
+      
+      // Send message with content blocks if there are any, otherwise with just text
+      if (userContent.length > 0) {
+        await sendMessage(userContent);
+      } else if (currentInput.trim()) {
         await sendMessage(currentInput);
       }
     } catch (error) {
@@ -1087,6 +1115,22 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
                     </div>
                   </div>
                 );
+              } else if (block.type === 'document') {
+                // Show resource reference
+                return (
+                  <div key={index} className="my-2 p-2 bg-[#252526] rounded-md border border-[#3c3c3c]">
+                    <div className="flex items-center gap-2 mb-1">
+                      {block.source.media_type?.includes('folder') ? (
+                        <FolderIcon className="h-3 w-3 text-yellow-400" />
+                      ) : (
+                        <FileIcon className="h-3 w-3 text-yellow-400" />
+                      )}
+                      <span className="text-xs font-medium text-yellow-400">{block.title || 'Resource'}</span>
+                    </div>
+                    <div className="text-xs text-gray-400 truncate">{block.source.uri}</div>
+                    {block.source.data && <div className="text-xs mt-1">{block.source.data}</div>}
+                  </div>
+                );
               }
               return null;
             })}
@@ -1251,6 +1295,33 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
     }
   };
 
+  // Add handler for prompt selection
+  const handleSelectPrompt = (prompt: Prompt) => {
+    // Only keep one prompt (replace any existing)
+    setSelectedPrompts([prompt]);
+  };
+
+  const handleSelectResource = (resource: Resource) => {
+    setSelectedResources(prev => [...prev, resource]);
+  };
+
+  // Re-add the slash button and at sign button handlers
+  const handleSlashButtonClick = () => {
+    if (webContainer) {
+      setIsPromptMenuOpen(true);
+    } else {
+      alert("WebContainer is not initialized. Please wait a moment and try again.");
+    }
+  };
+
+  const handleAtSignButtonClick = () => {
+    if (webContainer) {
+      setIsResourceMenuOpen(true);
+    } else {
+      alert("WebContainer is not initialized. Please wait a moment and try again.");
+    }
+  };
+
   // Safely render tool result content
   const renderToolResultContent = (result: ToolResult) => {
     if (!result) return null;
@@ -1346,6 +1417,23 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
         onOpenChange={setIsMpcMenuOpen}
       />
 
+      {/* Pass prompts to PromptMenu */}
+      <PromptMenu
+        isOpen={isPromptMenuOpen}
+        onOpenChange={setIsPromptMenuOpen}
+        prompts={availablePrompts}
+        onSelectPrompt={handleSelectPrompt}
+      />
+
+      {/* Pass resources to ResourceMenu */}
+      <ResourceMenu
+        isOpen={isResourceMenuOpen}
+        onOpenChange={setIsResourceMenuOpen}
+        resources={availableResources}
+        onSelectResource={handleSelectResource}
+      />
+      
+
       {/* Server status message */}
       {renderServerStatus()}
     
@@ -1411,11 +1499,12 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
       </div>
 
       <div className="p-4 border-t border-[#3c3c3c] bg-[#252526]">
-        {/* Display selected file previews above the input */}
-        {selectedFiles.length > 0 && (
+        {/* Display selected files, prompts, and resources */}
+        {(selectedFiles.length > 0 || selectedPrompts.length > 0 || selectedResources.length > 0) && (
           <div className="mb-3 flex flex-wrap gap-2">
+            {/* Image files */}
             {selectedFiles.map((file, index) => (
-              <div key={index} className="relative group">
+              <div key={`file-${index}`} className="relative group">
                 <div className="w-16 h-16 rounded-md overflow-hidden border border-[#4c4c4c] bg-[#2a2a2a] flex items-center justify-center">
                   {file.type.startsWith('image/') ? (
                     <img 
@@ -1436,6 +1525,48 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
                 <div className="absolute bottom-0 left-0 right-0 bg-black/60 py-0.5 px-1 text-[10px] text-white truncate">
                   {file.name}
                 </div>
+              </div>
+            ))}
+            
+            {/* Selected prompts */}
+            {selectedPrompts.map((prompt, index) => (
+              <div key={`prompt-${index}`} className="relative group">
+                <div className="w-32 rounded-md overflow-hidden border border-[#4c4c4c] bg-[#2a2a2a] p-2">
+                  <div className="text-xs font-medium text-blue-400 flex items-center gap-1 mb-1">
+                    <Sparkles className="h-3 w-3" />
+                    <span>Prompt</span>
+                  </div>
+                  <div className="text-[11px] text-white truncate">{prompt.name}</div>
+                </div>
+                <button 
+                  onClick={() => setSelectedPrompts(selectedPrompts.filter((_, i) => i !== index))}
+                  className="absolute -top-1 -right-1 bg-[#2a2a2a] border border-[#4c4c4c] rounded-full w-5 h-5 flex items-center justify-center text-gray-400 hover:text-white"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+            
+            {/* Selected resources */}
+            {selectedResources.map((resource, index) => (
+              <div key={`resource-${index}`} className="relative group">
+                <div className="w-32 rounded-md overflow-hidden border border-[#4c4c4c] bg-[#2a2a2a] p-2">
+                  <div className="text-xs font-medium text-yellow-400 flex items-center gap-1 mb-1">
+                    {resource.mimeType?.includes('folder') ? (
+                      <FolderIcon className="h-3 w-3" />
+                    ) : (
+                      <FileIcon className="h-3 w-3" />
+                    )}
+                    <span>Resource</span>
+                  </div>
+                  <div className="text-[11px] text-white truncate">{resource.name}</div>
+                </div>
+                <button 
+                  onClick={() => setSelectedResources(selectedResources.filter((_, i) => i !== index))}
+                  className="absolute -top-1 -right-1 bg-[#2a2a2a] border border-[#4c4c4c] rounded-full w-5 h-5 flex items-center justify-center text-gray-400 hover:text-white"
+                >
+                  <X className="h-3 w-3" />
+                </button>
               </div>
             ))}
           </div>
@@ -1471,7 +1602,27 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
           >
             <Server className="h-4 w-4" />
           </button>
-         
+          
+          {/* Slash command button */}
+          <button 
+            type="button"
+            className="w-8 h-8 rounded-full bg-[#3c3c3c] flex items-center justify-center text-white hover:bg-[#4c4c4c] focus:outline-none"
+            disabled={isLoading}
+            onClick={handleSlashButtonClick}
+          >
+            <SlashIcon className="h-4 w-4" />
+          </button>
+          
+          {/* At sign button for resources */}
+          <button 
+            type="button"
+            className="w-8 h-8 rounded-full bg-[#3c3c3c] flex items-center justify-center text-white hover:bg-[#4c4c4c] focus:outline-none"
+            disabled={isLoading}
+            onClick={handleAtSignButtonClick}
+          >
+            <AtSignIcon className="h-4 w-4" />
+          </button>
+          
           <input
             ref={inputRef}
             value={input}

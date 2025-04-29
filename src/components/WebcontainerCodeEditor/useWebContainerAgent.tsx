@@ -77,7 +77,8 @@ export type Message = UserTextMessage | AssistantTextMessage | ToolCallMessage |
 // For Anthropic API message format
 export type ContentBlock = 
   | { type: "text"; text: string }
-  | { type: "image"; source: { type: "base64"; media_type: string; data: string } };
+  | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
+  | { type: "document"; title: string; source: { type: "text"; media_type: string; data: string, uri?: string } };
 
 export type AnthropicMessage = {
   role: "user" | "assistant";

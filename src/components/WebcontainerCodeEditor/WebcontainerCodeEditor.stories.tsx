@@ -201,7 +201,6 @@ export const IntegratedWebContainer: StoryObj = {
     const [messages, setMessages] = useState<any[]>([]);
     const [cmdkOpen, setCmdkOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
-    const [chatInput, setChatInput] = useState("");
     const [showApiKeyForm, setShowApiKeyForm] = useState(false);
     const [activePanels, setActivePanels] = useState({
       explorer: true,
