@@ -422,7 +422,7 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
   
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const [isPromptMenuOpen, setIsPromptMenuOpen] = useState(false);
   const [isResourceMenuOpen, setIsResourceMenuOpen] = useState(false);
@@ -741,6 +741,15 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.focus();
+      
+      // Initialize height on mount
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.style.height = '0';
+          const newHeight = Math.min(inputRef.current.scrollHeight, 480);
+          inputRef.current.style.height = `${newHeight}px`;
+        }
+      }, 0);
     }
   }, []);
 
@@ -1498,7 +1507,7 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
         </div>
       </div>
 
-      <div className="p-4 border-t border-[#3c3c3c] bg-[#252526]">
+      <div className="p-4 border-t border-[#3c3c3c] bg-[#1e1e1e]">
         {/* Display selected files, prompts, and resources */}
         {(selectedFiles.length > 0 || selectedPrompts.length > 0 || selectedResources.length > 0) && (
           <div className="mb-3 flex flex-wrap gap-2">
@@ -1573,76 +1582,100 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
         )}
       
         <form
-          className="flex gap-2"
           onSubmit={(e) => {
             e.preventDefault();
             handleSendMessage();
           }}
+          className="relative"
         >
-          {/* File trigger button */}
-          <FileTrigger
-            onSelect={(e) => handleFileSelect(e as FileList)}
-            acceptedFileTypes={["image/*"]}
-          >
-            <AriaButton 
-              type="button"
-              className="w-8 h-8 rounded-full bg-[#3c3c3c] flex items-center justify-center text-white hover:bg-[#4c4c4c] focus:outline-none"
-              isDisabled={isLoading}
+          <div className="flex flex-col gap-2 px-3 py-2 rounded-xl bg-[#323232] border border-[#3c3c3c] focus-within:ring-1 focus-within:ring-[#3c3c3c]">
+            <div className="flex gap-1">
+              {/* File trigger button */}
+              <FileTrigger
+                onSelect={(e) => handleFileSelect(e as FileList)}
+                acceptedFileTypes={["image/*"]}
+              >
+                <AriaButton 
+                  type="button"
+                  className="p-2 rounded-md text-gray-400 hover:text-white hover:bg-[#404040] focus:outline-none transition-colors"
+                  isDisabled={isLoading}
+                >
+                  <ImageIcon className="h-5 w-5" />
+                </AriaButton>
+              </FileTrigger>
+              
+              {/* MPC Servers button */}
+              <button 
+                type="button"
+                className="p-2 rounded-md text-gray-400 hover:text-white hover:bg-[#404040] focus:outline-none transition-colors"
+                disabled={isLoading}
+                onClick={handleServerButtonClick}
+              >
+                <Server className="h-5 w-5" />
+              </button>
+              
+              {/* Slash command button */}
+              <button 
+                type="button"
+                className="p-2 rounded-md text-gray-400 hover:text-white hover:bg-[#404040] focus:outline-none transition-colors"
+                disabled={isLoading}
+                onClick={handleSlashButtonClick}
+              >
+                <SlashIcon className="h-5 w-5" />
+              </button>
+              
+              {/* At sign button for resources */}
+              <button 
+                type="button"
+                className="p-2 rounded-md text-gray-400 hover:text-white hover:bg-[#404040] focus:outline-none transition-colors"
+                disabled={isLoading}
+                onClick={handleAtSignButtonClick}
+              >
+                <AtSignIcon className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="relative">
+              <textarea
+                ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  // Auto-adjust height
+                  e.target.style.height = '0';
+                  const newHeight = Math.min(e.target.scrollHeight, 480);
+                  e.target.style.height = `${newHeight}px`;
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (input.trim() || selectedFiles.length > 0) {
+                      handleSendMessage();
+                    }
+                  }
+                }}
+                placeholder="Type a message..."
+                className="flex-1 w-full bg-transparent text-white border-0 text-sm focus:ring-0 focus:outline-none py-2 resize-none"
+                disabled={isLoading}
+                rows={1}
+                style={{ minHeight: '40px', height: 'auto' }}
+              />
+            </div>
+            
+            <button 
+              type="submit" 
+              disabled={isLoading || !input.trim() && selectedFiles.length === 0}
+              className="p-2 rounded-full bg-[#2563eb] w-9.5 h-9 ml-auto text-white disabled:opacity-50 disabled:cursor-not-allowed focus:outline-[#2563eb] hover:bg-[#2060e0] transition-colors ml-2"
             >
-              <ImageIcon className="h-4 w-4" />
-            </AriaButton>
-          </FileTrigger>
+              {isLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <SendIcon className="h-5 w-5" />
+              )}
+            </button>
+          </div>
           
-          {/* MPC Servers button */}
-          <button 
-            type="button"
-            className="w-8 h-8 rounded-full bg-[#3c3c3c] flex items-center justify-center text-white hover:bg-[#4c4c4c] focus:outline-none"
-            disabled={isLoading}
-            onClick={handleServerButtonClick}
-          >
-            <Server className="h-4 w-4" />
-          </button>
-          
-          {/* Slash command button */}
-          <button 
-            type="button"
-            className="w-8 h-8 rounded-full bg-[#3c3c3c] flex items-center justify-center text-white hover:bg-[#4c4c4c] focus:outline-none"
-            disabled={isLoading}
-            onClick={handleSlashButtonClick}
-          >
-            <SlashIcon className="h-4 w-4" />
-          </button>
-          
-          {/* At sign button for resources */}
-          <button 
-            type="button"
-            className="w-8 h-8 rounded-full bg-[#3c3c3c] flex items-center justify-center text-white hover:bg-[#4c4c4c] focus:outline-none"
-            disabled={isLoading}
-            onClick={handleAtSignButtonClick}
-          >
-            <AtSignIcon className="h-4 w-4" />
-          </button>
-          
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type a message..."
-            className="flex-1 bg-[#3c3c3c] text-white border-0 rounded p-2 text-sm focus:ring-0 focus:outline-none"
-            disabled={isLoading}
-          />
-          
-          <button 
-            type="submit" 
-            disabled={isLoading}
-            className="w-8 h-8 rounded-full bg-[#2563eb] flex items-center justify-center text-white disabled:bg-[#4c4c4c] disabled:cursor-not-allowed focus:outline-none"
-          >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <SendIcon className="h-4 w-4" />
-            )}
-          </button>
+         
         </form>
       </div>
     </div>
