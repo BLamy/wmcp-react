@@ -5,7 +5,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from "r
 import { FileSystemTree } from "@webcontainer/api";
 import { files } from "virtual:webcontainer-files";
 
-type WebContainerState = "booting" | "ready" | "none";
+type WebContainerStatus = "booting" | "installing" | "mounting" | "ready" | "none" | "error";
 
 // Extend the context to include both the WebContainer and filesystem registry functions
 interface WebContainerContextValue {
@@ -13,6 +13,7 @@ interface WebContainerContextValue {
   registerFilesystem: (id: string, filesystem: FileSystemTree) => void;
   unregisterFilesystem: (id: string) => void;
   filesystemIds: string[]; // Add a property to see registered filesystems
+  status: WebContainerStatus;
 }
 
 export const WebContainerContext = createContext<WebContainerContextValue>({
@@ -20,6 +21,7 @@ export const WebContainerContext = createContext<WebContainerContextValue>({
   registerFilesystem: () => {},
   unregisterFilesystem: () => {},
   filesystemIds: [],
+  status: "none"
 });
 
 const crossOriginIsolatedErrorMessage = `Failed to execute 'postMessage' on 'Worker': SharedArrayBuffer transfer requires self.crossOriginIsolated.`;
@@ -30,9 +32,9 @@ export default function WebContainerProvider({
     children: React.ReactNode;
 }) {
     const [webContainer, setWebContainer] = useState<WebContainer | null>(null);
-    const webContainerStatus = useRef<WebContainerState>("none");
+    const [webContainerStatus, setWebContainerStatus] = useState<WebContainerStatus>("none");
     const [portForwards, setPortForwards] = useState<Record<number, string>>({});
-    const ready = webContainerStatus.current === "ready";
+    const ready = webContainerStatus === "ready";
     
     // Track registered filesystem trees
     const filesystemsRef = useRef<Record<string, FileSystemTree>>({});
@@ -158,7 +160,7 @@ export default function WebContainerProvider({
       setFilesystemIds(Object.keys(filesystemsRef.current));
       
       // If the container is already ready, apply the filesystem immediately
-      if (webContainerStatus.current === "ready" && webContainer) {
+      if (webContainerStatus !== "booting" && webContainerStatus !== "none" && webContainer) {
         mountFilesystem(webContainer, filesystem, id);
       }
     };
@@ -175,15 +177,16 @@ export default function WebContainerProvider({
     };
 
     useEffect(() => {
-        if (webContainerStatus.current === "none") {
-            webContainerStatus.current = "booting";
+        if (webContainerStatus === "none") {
+            setWebContainerStatus("booting");
             console.log("Booting WebContainer...");
             
             WebContainer.boot()
                 .then(async (webContainer) => {
+                    setWebContainerStatus("mounting");
+
                     console.log("WebContainer booted successfully");
                     setWebContainer(webContainer);
-                    webContainerStatus.current = "ready";
                     
                     webContainer.on('server-ready', (port, url) => {
                         console.log(`Server ready on port ${port}: ${url}`);
@@ -213,7 +216,7 @@ export default function WebContainerProvider({
                                     
                                     // Recursively process directory contents using helper function
                                     await writeDirectoryContents(webContainer, path, entry.directory);
-                                } else if ('file' in entry) {
+                                } else if ('file' in entry && 'contents' in entry.file) {
                                     // Write file
                                     try {
                                         await webContainer.fs.writeFile(path, entry.file.contents);
@@ -226,17 +229,21 @@ export default function WebContainerProvider({
                             console.log("Direct file writing complete");
                             
                             // Run npm install after files are written
+                            setWebContainerStatus("installing");
+                            await new Promise(resolve => setTimeout(resolve, 1));
                             console.log("Running npm install...");
                             try {
-                                const installProcess = await webContainer.spawn('npm', ['install']);
+                                const installProcess = await webContainer.spawn('pnpm', ['install']);
                                 installProcess.output.pipeTo(new WritableStream({
                                     write(data) {
                                         console.log(`[npm install] ${data}`);
                                     }
                                 }));
                                 const installExitCode = await installProcess.exit;
+                                setWebContainerStatus("ready");
                                 console.log(`npm install completed with exit code ${installExitCode}`);
                             } catch (error) {
+                                setWebContainerStatus("error");
                                 console.error("Error running npm install:", error);
                             }
                         } catch (error) {
@@ -274,50 +281,51 @@ export default function WebContainerProvider({
                     }
                     
                     // Apply registered filesystems
-                    console.log("Applying other registered filesystems...");
-                    applyFilesystems();
+                    // console.log("Applying other registered filesystems...");
+                    // await applyFilesystems();
                     
-                    // List files in the WebContainer to verify they were mounted
-                    setTimeout(async () => {
-                        try {
-                            console.log("Listing files in WebContainer root:");
-                            const rootFiles = await webContainer.fs.readdir("/");
-                            console.log("Root files:", rootFiles);
+                    // // List files in the WebContainer to verify they were mounted
+                    // setTimeout(async () => {
+                    //     try {
+                    //         console.log("Listing files in WebContainer root:");
+                    //         const rootFiles = await webContainer.fs.readdir("/");
+                    //         console.log("Root files:", rootFiles);
                             
-                            // Check specific files we expect to be there
-                            try {
-                                const hasPackageJson = await webContainer.fs.readFile("/package.json", "utf-8");
-                                console.log("Found package.json:", hasPackageJson.substring(0, 100) + "...");
-                            } catch (err) {
-                                console.error("Error reading package.json:", err);
-                            }
+                    //         // Check specific files we expect to be there
+                    //         try {
+                    //             const hasPackageJson = await webContainer.fs.readFile("/package.json", "utf-8");
+                    //             console.log("Found package.json:", hasPackageJson.substring(0, 100) + "...");
+                    //         } catch (err) {
+                    //             console.error("Error reading package.json:", err);
+                    //         }
                             
-                            try {
-                                const hasTsConfig = await webContainer.fs.readFile("/tsconfig.json", "utf-8");
-                                console.log("Found tsconfig.json:", hasTsConfig.substring(0, 100) + "...");
-                            } catch (err) {
-                                console.error("Error reading tsconfig.json:", err);
-                            }
+                    //         try {
+                    //             const hasTsConfig = await webContainer.fs.readFile("/tsconfig.json", "utf-8");
+                    //             console.log("Found tsconfig.json:", hasTsConfig.substring(0, 100) + "...");
+                    //         } catch (err) {
+                    //             console.error("Error reading tsconfig.json:", err);
+                    //         }
                             
-                            // Check each subdirectory
-                            for (const file of rootFiles) {
-                                try {
-                                    // Try to read the directory - if it succeeds, it's a directory
-                                    const subFiles = await webContainer.fs.readdir(`/${file}`);
-                                    console.log(`Files in /${file}:`, subFiles);
-                                } catch (err) {
-                                    // Not a directory or other error
-                                    console.log(`${file} is not a directory or cannot be read`);
-                                }
-                            }
-                        } catch (err) {
-                            console.error("Error listing WebContainer files:", err);
-                        }
-                    }, 1000);
+                    //         // Check each subdirectory
+                    //         for (const file of rootFiles) {
+                    //             try {
+                    //                 // Try to read the directory - if it succeeds, it's a directory
+                    //                 const subFiles = await webContainer.fs.readdir(`/${file}`);
+                    //                 console.log(`Files in /${file}:`, subFiles);
+                    //             } catch (err) {
+                    //                 // Not a directory or other error
+                    //                 console.log(`${file} is not a directory or cannot be read`);
+                    //             }
+                    //         }
+                    //     } catch (err) {
+                    //         console.error("Error listing WebContainer files:", err);
+                    //     }
+                    // }, 1000);
                 })
                 .catch((error) => {
                     console.error("Error booting WebContainer:", error);
-                    
+                    setWebContainerStatus("error");
+
                     if (!(error instanceof Error)) return;
                     if (error.message === crossOriginIsolatedErrorMessage) {
                         error.message += `\n\nSee https://webcontainers.io/guides/quickstart#cross-origin-isolation for more information.
@@ -331,16 +339,17 @@ export default function WebContainerProvider({
             if (ready) {
                 console.log("Tearing down WebContainer");
                 webContainer?.teardown();
-                webContainerStatus.current = "none";
+                setWebContainerStatus("none");
             }
         };
-    }, [ready, webContainer]);
+    }, [ready, webContainer, webContainerStatus]);
 
     const contextValue = {
       webContainer,
       registerFilesystem,
       unregisterFilesystem,
-      filesystemIds
+      filesystemIds,
+      status: webContainerStatus
     };
 
     return (

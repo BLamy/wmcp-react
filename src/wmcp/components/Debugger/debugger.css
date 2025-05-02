@@ -1,0 +1,94 @@
+
+/* CodeMirror */
+.cm-editor {
+    height: 100%;
+    overflow: auto !important;
+  }
+  
+  .cm-scroller {
+    overflow: auto !important;
+  }
+  
+  .cm-debugger-highlight {
+    background-color: rgba(65, 184, 131, 0.3);
+    border-radius: 2px;
+    padding: 0 3px;
+    margin: 0 -3px;
+  }
+  
+  .cm-line:has(.cm-debugger-highlight) {
+    background-color: rgba(65, 184, 131, 0.1);
+    border-left: 3px solid rgb(65, 184, 131);
+    padding-left: 8px !important;
+    margin-left: -11px;
+  }
+  
+  
+  .timeline {
+    height: 30px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    background: #2a2a2a;
+  }
+  
+  .timeline-track {
+    width: 100%;
+    height: 4px;
+    background: #3c3c3c;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  
+  .timeline-point {
+    width: 10px;
+    height: 10px;
+    background: #555;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.1s ease;
+  }
+  
+  .timeline-point:hover {
+    transform: scale(1.3);
+  }
+  
+  .timeline-point.active {
+    background: #3BB446;
+    transform: scale(1.2);
+  }
+  
+  .variables-panel {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 12px;
+  }
+  
+  .variable {
+    padding: 8px 12px;
+    border-bottom: 1px solid #333;
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+  }
+  
+  .variable.changed {
+    background: rgba(59, 180, 70, 0.1);
+    border-left: 3px solid #3BB446;
+  }
+  
+  .var-name {
+    font-weight: bold;
+    margin-right: 1rem;
+    color: #9cdcfe;
+  }
+  
+  .undefined { color: #888; }
+  .null { color: #888; }
+  .boolean { color: #569cd6; }
+  .number { color: #b5cea8; }
+  .string { color: #ce9178; }
+  .object { color: #4ec9b0; }
+  

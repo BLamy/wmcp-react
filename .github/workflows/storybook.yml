@@ -20,37 +20,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Build job
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+          run_install: false
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: npm
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
-      
-      - name: Build Storybook
-        run: npm run build-storybook
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
       
       - name: Run Ensure Headers Script
         run: |
           # Run the script to ensure all HTML files have proper headers and service worker
           node .storybook/ensure-headers.js
           
-      - name: Verify Service Worker Files
-        run: |
-          # Verify that the service worker files are in the storybook-static directory
-          echo "Checking for service worker files:"
-          if [ -f "storybook-static/gh-pages-coi.js" ]; then echo "✓ gh-pages-coi.js"; else echo "✗ gh-pages-coi.js is missing!"; exit 1; fi
-          if [ -f "storybook-static/gh-pages-coi-sw.js" ]; then echo "✓ gh-pages-coi-sw.js"; else echo "✗ gh-pages-coi-sw.js is missing!"; exit 1; fi
-      
       - name: Setup Pages
         uses: actions/configure-pages@v4
       

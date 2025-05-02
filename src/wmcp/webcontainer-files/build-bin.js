@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
 
 // Path to the compiled bin directory
-const binDir = path.resolve(__dirname, 'dist/bin');
+const binDir = path.resolve(path.dirname(new URL(import.meta.url).pathname), 'dist/bin');
 console.log(`Bin directory path: ${binDir}`);
 
 // Check if the directory exists
