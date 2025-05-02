@@ -50,6 +50,9 @@ importers:
       '@lexical/rich-text':
         specifier: ^0.28.0
         version: 0.28.0
+      '@lexical/selection':
+        specifier: ^0.31.0
+        version: 0.31.0
       '@lexical/table':
         specifier: ^0.28.0
         version: 0.28.0
