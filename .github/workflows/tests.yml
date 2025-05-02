@@ -12,19 +12,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+          run_install: false
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
-          cache: 'npm'
-          
+          node-version: '18'
+          cache: 'pnpm'
+
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
-        
+        run: pnpm install --frozen-lockfile
+          
       - name: Run unit tests
         # Continue even if tests fail
         continue-on-error: true
-        run: npm test
+        run: pnpm test
         
       - name: Upload test report
         if: always()
@@ -41,14 +47,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+          run_install: false
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
-          cache: 'npm'
+          node-version: '18'
+          cache: 'pnpm'
           
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: pnpm install --frozen-lockfile
         
       # Skip Playwright browser installation when running locally with act
       - name: Check if running in GitHub Actions
@@ -62,19 +74,19 @@ jobs:
         
       - name: Start Storybook in background
         if: steps.check_github.outputs.is_github == 'true'
-        run: npm run storybook &
+        run: pnpm run storybook &
         
       - name: Wait for Storybook to be ready
         if: steps.check_github.outputs.is_github == 'true'
         run: |
-          npm install -g wait-on
+          pnpm install -g wait-on
           wait-on http://localhost:6006
         
       - name: Run component tests
         if: steps.check_github.outputs.is_github == 'true'
         # Continue even if tests fail
         continue-on-error: true
-        run: npm run test:component
+        run: pnpm run test:component
         
       - name: Upload Playwright report
         if: always() && steps.check_github.outputs.is_github == 'true'
