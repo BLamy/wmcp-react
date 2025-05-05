@@ -1,10 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import WebContainerDebugger from "./index";
-import React from "react";
-
 
 const meta: Meta<typeof WebContainerDebugger> = {
-  title: "Webcontainer/Debugger",
+  title: "Debugger/WebContainerPowered",
   component: WebContainerDebugger,
   parameters: {
     layout: "fullscreen",
@@ -14,6 +12,5 @@ const meta: Meta<typeof WebContainerDebugger> = {
 export default meta;
 type Story = StoryObj<typeof WebContainerDebugger>;
 
-export const Default: Story = {
-
-};
+// This story relies on the WebContainer integration by default
+export const Default: Story = {};
