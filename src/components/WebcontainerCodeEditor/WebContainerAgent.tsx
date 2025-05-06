@@ -398,6 +398,8 @@ export interface WebContainerAgentProps {
   onRequestApiKey?: () => void;
   testResults?: any;
   serverConfigs?: Record<string, ServerConfig>;
+  activeServers?: Record<string, ServerConfig>;
+  setActiveServers?: React.Dispatch<React.SetStateAction<Record<string, ServerConfig>>>;
 }
 
 // Define the handle type for the ref
@@ -411,13 +413,15 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
   apiKey, 
   onRequestApiKey,
   testResults,
-  serverConfigs = DEFAULT_SERVER_CONFIGS
+  serverConfigs = DEFAULT_SERVER_CONFIGS,
+  activeServers = {},
+  setActiveServers
 }, ref) => {
   const [input, setInput] = useState("");
   const [collapsedTools, setCollapsedTools] = useState<Record<string, boolean>>({});
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isServerConfigOpen, setIsServerConfigOpen] = useState(false);
-  const [activeServers, setActiveServers] = useState<Record<string, ServerConfig>>({});
+  const [localActiveServers, setLocalActiveServers] = useState<Record<string, ServerConfig>>(activeServers);
   const [availableServerConfigs, setAvailableServerConfigs] = useState<Record<string, ServerConfig>>(serverConfigs);
   
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -426,12 +430,13 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
 
   const [isPromptMenuOpen, setIsPromptMenuOpen] = useState(false);
   const [isResourceMenuOpen, setIsResourceMenuOpen] = useState(false);
+  const [isMpcMenuOpen, setIsMpcMenuOpen] = useState(false);
   
   // Add state for selected prompts
   const [selectedPrompts, setSelectedPrompts] = useState<Prompt[]>([]);
   const [selectedResources, setSelectedResources] = useState<Resource[]>([]);
   
-  // Initialize MPC server connection
+  // Initialize MPC server connection with the appropriate servers
   const { 
     status: serverStatus,
     tools: mcpTools,
@@ -440,7 +445,7 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
     executeTool,
     toolToServerMap
   } = useMCPServer({
-    mcpServers: activeServers
+    mcpServers: setActiveServers ? activeServers : localActiveServers
   });
 
   // Add a state to track if WebContainer is ready
@@ -451,6 +456,22 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
 
   // Add a state to track if initialization was attempted already
   const [serverInitAttempted, setServerInitAttempted] = useState(false);
+
+  // Use the setter from props if available, otherwise use the local state
+  const updateActiveServers = useCallback((servers: Record<string, ServerConfig>) => {
+    if (setActiveServers) {
+      setActiveServers(servers);
+    } else {
+      setLocalActiveServers(servers);
+    }
+  }, [setActiveServers]);
+
+  // Ensure we track changes to activeServers from props
+  useEffect(() => {
+    if (Object.keys(activeServers).length > 0) {
+      setLocalActiveServers(activeServers);
+    }
+  }, [activeServers]);
 
   // Add a function to properly initialize MPC servers with retries and checks
   const initializeMPCServer = async (serverName: string) => {
@@ -480,7 +501,7 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Set the active servers
-      setActiveServers(updatedServers);
+      updateActiveServers(updatedServers);
       
       // Log success attempt
       console.log(`MPC Server "${serverName}" activation initiated. Check console for status updates.`);
@@ -505,7 +526,7 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
     delete updatedServers[serverName];
     
     // Update active servers
-    setActiveServers(updatedServers);
+    updateActiveServers(updatedServers);
   };
 
   // Add a function to create and add a custom MPC server
@@ -543,7 +564,7 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
       };
       
       // Update active servers (this will also activate the new server)
-      setActiveServers(updatedServers);
+      updateActiveServers(updatedServers);
       
     } catch (error) {
       console.error("Error creating custom MPC server:", error);
@@ -1196,9 +1217,24 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
     console.log("Selected files:", files);
   };
 
-  // Handle opening the server config sheet
-  const handleOpenServerConfig = () => {
-    setIsServerConfigOpen(true);
+  // Handle opening MPC menu
+  const handleMpcMenuOpen = () => {
+    if (webContainer) {
+      setIsMpcMenuOpen(true);
+    } else {
+      alert("WebContainer is not initialized. Please wait a moment and try again.");
+      console.log("WebContainer status:", webContainer ? "Available" : "Not Available");
+    }
+  };
+
+  // Handle opening server config
+  const handleServerConfigOpen = () => {
+    if (webContainer) {
+      setIsServerConfigOpen(true);
+    } else {
+      alert("WebContainer is not initialized. Please wait a moment and try again.");
+      console.log("WebContainer status:", webContainer ? "Available" : "Not Available");
+    }
   };
 
   // Handle saving server config
@@ -1213,24 +1249,21 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
     
     // Delay setting servers to give WebContainer time to process
     setTimeout(() => {
-      setActiveServers(selectedServers);
+      updateActiveServers(selectedServers);
     }, 500);
   };
 
-  // Add useEffect hook to log server status changes
-  useEffect(() => {
-    if (serverStatus) {
-      console.log("MPC Server status changed:", serverStatus);
-    }
-    
-    // Add more detailed debugging for error state
-    if (serverStatus === 'ERROR') {
-      console.error("MPC Server initialization failed. Make sure the WebContainer is fully initialized.");
-      // You might want to show a notification or alert to the user here
-    }
-  }, [serverStatus]);
+  // Add handler for prompt selection
+  const handleSelectPrompt = (prompt: Prompt) => {
+    // Only keep one prompt (replace any existing)
+    setSelectedPrompts([prompt]);
+  };
 
-  // Add a status message component in the top of the WebContainerAgent
+  const handleSelectResource = (resource: Resource) => {
+    setSelectedResources(prev => [...prev, resource]);
+  };
+
+  // Add server status message component 
   const renderServerStatus = () => {
     if (!activeServers || Object.keys(activeServers).length === 0) {
       return null;
@@ -1247,7 +1280,7 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
           </div>
           <button 
             className="text-xs text-green-400 hover:text-green-300"
-            onClick={handleOpenServerConfig}
+            onClick={handleServerConfigOpen}
           >
             Configure
           </button>
@@ -1264,7 +1297,7 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
           </div>
           <button 
             className="text-xs text-yellow-400 hover:text-yellow-300"
-            onClick={handleOpenServerConfig}
+            onClick={handleServerConfigOpen}
           >
             Configure
           </button>
@@ -1281,7 +1314,7 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
           </div>
           <button 
             className="text-xs text-red-400 hover:text-red-300"
-            onClick={handleOpenServerConfig}
+            onClick={handleServerConfigOpen}
           >
             Configure
           </button>
@@ -1290,28 +1323,6 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
     }
 
     return null;
-  };
-
-  // Replace the old handleServerButtonClick with this modern implementation using CMDK
-  const [isMpcMenuOpen, setIsMpcMenuOpen] = useState(false);
-  
-  const handleServerButtonClick = () => {
-    if (webContainer) {
-      setIsMpcMenuOpen(true);
-    } else {
-      alert("WebContainer is not initialized. Please wait a moment and try again.");
-      console.log("WebContainer status:", webContainer ? "Available" : "Not Available");
-    }
-  };
-
-  // Add handler for prompt selection
-  const handleSelectPrompt = (prompt: Prompt) => {
-    // Only keep one prompt (replace any existing)
-    setSelectedPrompts([prompt]);
-  };
-
-  const handleSelectResource = (resource: Resource) => {
-    setSelectedResources(prev => [...prev, resource]);
   };
 
   // Re-add the slash button and at sign button handlers
@@ -1400,31 +1411,35 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
 
   return (
     <div className="h-full flex flex-col w-full bg-[#1e1e1e]">
-      {/* Server config sheet */}
-      <ServerConfigSheet
-        availableServers={availableServerConfigs}
-        activeServers={activeServers}
-        isOpen={isServerConfigOpen}
-        onOpenChange={setIsServerConfigOpen}
-        onSave={handleSaveServerConfig}
-        serverStatus={serverStatus}
-        tools={mcpTools}
-        serverToolMapping={toolToServerMap ? Object.fromEntries(toolToServerMap) : {}}
-        webContainerReady={webContainerReady}
-      />
+      {/* Server config sheet - only show it if we're managing servers locally */}
+      {!setActiveServers && (
+        <ServerConfigSheet
+          availableServers={availableServerConfigs}
+          activeServers={setActiveServers ? activeServers : localActiveServers}
+          isOpen={isServerConfigOpen}
+          onOpenChange={setIsServerConfigOpen}
+          onSave={handleSaveServerConfig}
+          serverStatus={serverStatus}
+          tools={mcpTools}
+          serverToolMapping={toolToServerMap ? Object.fromEntries(toolToServerMap) : {}}
+          webContainerReady={webContainerReady}
+        />
+      )}
       
-      {/* Add MPC Server Menu */}
-      <MpcServerMenu
-        serverConfigs={availableServerConfigs}
-        activeServers={activeServers}
-        serverStatus={serverStatus}
-        webContainerReady={webContainerReady}
-        onSelectServer={initializeMPCServer}
-        onRemoveServer={removeMPCServer}
-        onAddCustomServer={addCustomMPCServer}
-        isOpen={isMpcMenuOpen}
-        onOpenChange={setIsMpcMenuOpen}
-      />
+      {/* Only show MPC Server Menu if not managed by parent */}
+      {!setActiveServers && (
+        <MpcServerMenu
+          serverConfigs={availableServerConfigs}
+          activeServers={setActiveServers ? activeServers : localActiveServers}
+          serverStatus={serverStatus}
+          webContainerReady={webContainerReady}
+          onSelectServer={initializeMPCServer}
+          onRemoveServer={removeMPCServer}
+          onAddCustomServer={addCustomMPCServer}
+          isOpen={isMpcMenuOpen}
+          onOpenChange={setIsMpcMenuOpen}
+        />
+      )}
 
       {/* Pass prompts to PromptMenu */}
       <PromptMenu
@@ -1442,9 +1457,8 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
         onSelectResource={handleSelectResource}
       />
       
-
-      {/* Server status message */}
-      {renderServerStatus()}
+      {/* Only show server status if we're managing servers locally */}
+      {!setActiveServers && renderServerStatus()}
     
       <div className="flex-1 p-4 overflow-y-auto" ref={scrollAreaRef}>
         <div className="flex flex-col gap-4 max-w-full">
@@ -1604,15 +1618,17 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
                 </AriaButton>
               </FileTrigger>
               
-              {/* MPC Servers button */}
-              <button 
-                type="button"
-                className="p-2 rounded-md text-gray-400 hover:text-white hover:bg-[#404040] focus:outline-none transition-colors"
-                disabled={isLoading}
-                onClick={handleServerButtonClick}
-              >
-                <Server className="h-5 w-5" />
-              </button>
+              {/* Only show MPC Servers button if we're managing servers locally */}
+              {!setActiveServers && (
+                <button 
+                  type="button"
+                  className="p-2 rounded-md text-gray-400 hover:text-white hover:bg-[#404040] focus:outline-none transition-colors"
+                  disabled={isLoading}
+                  onClick={handleMpcMenuOpen}
+                >
+                  <Server className="h-5 w-5" />
+                </button>
+              )}
               
               {/* Slash command button */}
               <button 

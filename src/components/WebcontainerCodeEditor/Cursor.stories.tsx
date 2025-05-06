@@ -1,10 +1,10 @@
 import { Meta, StoryObj } from "@storybook/react";
-import { WebContainerAgent } from "./WebContainerAgent";
 import "xterm/css/xterm.css";
+import Cursor from "./Cursor";
 
-const agentMeta: Meta<typeof WebContainerAgent> = {
-  title: "Cursor/DumbSidebar",
-  component: WebContainerAgent,
+const agentMeta: Meta<typeof Cursor> = {
+  title: "Cursor/Editor",
+  component: Cursor,
   parameters: {
     layout: "fullscreen",
     docs: {
@@ -42,27 +42,10 @@ const agentMeta: Meta<typeof WebContainerAgent> = {
   },
 };
 
-export default agentMeta;
-type AgentStory = StoryObj<typeof WebContainerAgent>;
+type Story = StoryObj<typeof Cursor>;
 
-export const DefaultAgent: AgentStory = {
-  name: "WebContainer Agent",
-  parameters: {
-    docs: {
-      description: {
-        story: `
-          The WebContainer Agent provides an AI assistant interface for working with code in a WebContainer.
-          
-          ### Features demonstrated in this story:
-          - Chat interface with the AI assistant
-          - Tool execution for file operations
-          - Code analysis and editing
-          - Terminal command execution
-          - Test execution and reporting
-        `,
-      },
-    },
+export const Default: Story = {
+  args: {
   },
 };
-
-
+export default agentMeta;
