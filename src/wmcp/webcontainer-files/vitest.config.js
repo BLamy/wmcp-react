@@ -17,6 +17,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['**/*.test.js'],
+    reporters: ['json', 'default'],
+    outputFile: './.blamy/coverage/vitest-coverage.json'
   },
   workers: {
     isolate: true,

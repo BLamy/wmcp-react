@@ -9,7 +9,7 @@ describe('Math functions', () => {
   });
 
   it('subtracts two numbers correctly', () => {
-    expect(subtract(5, 3)).toBe(2);
+    expect(subtract(5, 3)).toBe(8);
     expect(subtract(1, 1)).toBe(0);
     expect(subtract(0, 5)).toBe(-5);
   });

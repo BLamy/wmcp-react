@@ -58,6 +58,7 @@ import { css } from "@codemirror/lang-css";
 import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 
 // Default MPC server configurations
 const DEFAULT_SERVER_CONFIGS: Record<string, ServerConfig> = {
@@ -223,7 +224,7 @@ export const Cursor = ({
   >(DEFAULT_SERVER_CONFIGS);
   const [isMpcServerConfigOpen, setIsMpcServerConfigOpen] = useState(false);
   const [webContainerReady, setWebContainerReady] = useState(false);
-
+  const [debugData, setDebugData] = useState<Record<string, Record<string, any>> | null>(null);
   // Initialize MPC server connection
   const {
     status: serverStatus,
@@ -258,8 +259,9 @@ export const Cursor = ({
     DebugStep[] | null
   >(null);
   const [debugStepIndex, setDebugStepIndex] = useState(0);
+  const [testStatuses, setTestStatuses] = useState<Record<string, string>>({});
   const cmViewRef = useRef<EditorView | null>(null);
-
+  const [isRunningTests, setIsRunningTests] = useState(false);
   // Add useEffect to track WebContainer readiness
   useEffect(() => {
     if (webContainer) {
@@ -434,6 +436,7 @@ export const Cursor = ({
       console.error("Cannot load debug data: WebContainer is not available");
       setTerminalMessage("WebContainer not ready");
       setParsedTests({});
+      setTestStatuses({});
       return;
     }
 
@@ -442,10 +445,26 @@ export const Cursor = ({
     let foundTimetravelPath: string | null = null;
     let foundValidData = false;
     const debugStepsData: Record<string, Record<string, any>> = {};
+    // Initialize map to store test statuses (passed/failed)
+    const statuses: Record<string, string> = {};
 
     try {
-      // Try different possible paths for the timetravel directory
+      // Try to read the coverage file to get test statuses
+      const coveragePath = "/.blamy/coverage/vitest-coverage.json";
+      try {
+        const covRaw = await webContainer.fs.readFile(coveragePath, "utf-8");
+        const covJson = JSON.parse(covRaw);
+        const statuses = covJson.testResults[0].assertionResults.reduce((acc: Record<string, string>, curr: any) => {
+            acc[curr.title.replace(/[\s\\/?:*|"<>.]/g, "_").replace(/_+/g, "_")] = curr.status;
+            return acc;
+        }, {} as Record<string, string>);
+        console.log("Loaded test statuses from coverage:", statuses);
+        setTestStatuses(statuses);
+      } catch (covErr) {
+        console.warn("initDebugData: unable to read coverage file", coveragePath, covErr);
+      }
 
+      // Try different possible paths for the timetravel directory
       const path = "./.timetravel";
       try {
         const dirs = await webContainer.fs.readdir(path, {
@@ -557,10 +576,13 @@ export const Cursor = ({
         console.log("No timetravel directory found.");
         setTerminalMessage("No timetravel directory found. Try running tests.");
         setParsedTests({});
+        setTestStatuses({});
         return;
       }
 
       // Convert the grouped debug steps to the format expected by DumbDebugger
+      setDebugData(debugStepsData);
+      console.log("debugStepsData", debugStepsData);
       const allParsedTests = flattenDebugSteps(debugStepsData);
 
       setParsedTests(allParsedTests);
@@ -579,6 +601,7 @@ export const Cursor = ({
     } catch (error) {
       console.error("Error during debug data initialization:", error);
       setTerminalMessage(`Error loading debug data: ${error}`);
+      setTestStatuses({});
     } finally {
       setLoading(false);
     }
@@ -593,6 +616,7 @@ export const Cursor = ({
 
     setTerminalMessage("Running tests to generate debug data...");
     setParsedTests({}); // Clear previous results
+    setIsRunningTests(true);
 
     try {
       // Spawn the test process
@@ -614,6 +638,7 @@ export const Cursor = ({
         setTerminalMessage(
           `Tests completed successfully!\n${output}\nLoading debug data...`
         );
+        setIsRunningTests(false);
         // Wait a moment for files to be written before loading
         setTimeout(initDebugData, 1000);
       } else {
@@ -624,7 +649,7 @@ export const Cursor = ({
       console.error("Error running tests:", error);
       setTerminalMessage(`Error running tests: ${error}`);
     } finally {
-      // setIsRunningTests(false);
+      setIsRunningTests(false);
     }
   };
 
@@ -1700,25 +1725,6 @@ export const Cursor = ({
                   <span>Test Debugger</span>
                   <div className="flex items-center space-x-2">
                     <button
-                      className="p-1 rounded bg-blue-600 hover:bg-blue-700 text-white"
-                      onClick={runTests}
-                      title="Run Tests"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M5 3l14 9-14 9V3z"></path>
-                      </svg>
-                    </button>
-                    <button
                       className="p-1 text-gray-400 hover:text-white"
                       onClick={initDebugData}
                       title="Refresh"
@@ -1759,27 +1765,120 @@ export const Cursor = ({
                             className="px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white"
                             onClick={runTests}
                           >
-                            Run Tests
+                            {isRunningTests ? "Running..." : "Run Tests"}
                           </button>
                         </div>
                       ) : (
                         <ul>
-                          {Object.entries(parsedTests).map(([name, steps]) => (
-                            <li
-                              key={name}
-                              className={`px-4 py-2 hover:bg-[#2a2d2e] cursor-pointer flex justify-between ${
-                                selectedDebugTest === steps
-                                  ? "bg-[#37373d]"
-                                  : ""
-                              }`}
-                              onClick={() => handleDebugTestSelect(steps)}
-                            >
-                              <span className="text-sm">{name}</span>
-                              <span className="text-xs text-gray-500">
-                                {steps.length} steps
-                              </span>
-                            </li>
-                          ))}
+                            {debugData && Object.entries(debugData).map(([fileName, fileTests]) => {
+                              // Check if all tests in this file passed
+                              const allTestsPassed = Object.keys(fileTests).every(testName => {
+                                const sanitizedTestName = testName
+                                  .replace(/[\s\\/?:*|"<>.]/g, "_")
+                                  .replace(/_+/g, "_");
+                                return testStatuses[sanitizedTestName] === "passed";
+                              });
+                              
+                              const fileStatus = allTestsPassed ? "passed" : "failed";
+                              
+                              return (
+                                <li key={fileName}>
+                                  <Collapsible className="w-full">
+                                    <CollapsibleTrigger className="w-full">
+                                      <div className="px-4 py-2 hover:bg-[#2a2d2e] cursor-pointer flex justify-between items-center overflow-hidden">
+                                        <div className="flex items-center space-x-2 min-w-0 flex-1">
+                                          {fileStatus === "passed" ? (
+                                            <svg
+                                              xmlns="http://www.w3.org/2000/svg"
+                                              className="w-4 h-4 text-green-500 flex-shrink-0"
+                                              viewBox="0 0 20 20"
+                                              fill="currentColor"
+                                            >
+                                              <path
+                                                fillRule="evenodd"
+                                                d="M16.707 5.293a1 1 0 00-1.414 0L8 12.586 4.707 9.293a1 1 0 10-1.414 1.414l4 4a1 1 0 001.414 0l8-8a1 1 0 000-1.414z"
+                                                clipRule="evenodd"
+                                              />
+                                            </svg>
+                                          ) : (
+                                            <svg
+                                              xmlns="http://www.w3.org/2000/svg"
+                                              className="w-4 h-4 text-red-500 flex-shrink-0"
+                                              viewBox="0 0 20 20"
+                                              fill="currentColor"
+                                            >
+                                              <path
+                                                fillRule="evenodd"
+                                                d="M10 8.586l4.95-4.95a1 1 0 111.415 1.414L11.414 10l4.95 4.95a1 1 0 01-1.415 1.414L10 11.414l-4.95 4.95a1 1 0 01-1.414-1.414L8.586 10 3.636 5.05a1 1 0 011.414-1.414L10 8.586z"
+                                                clipRule="evenodd"
+                                              />
+                                            </svg>
+                                          )}
+                                          <span className="text-sm truncate">{fileName}</span>
+                                        </div>
+                                        <span className="text-xs text-gray-500 ml-2 flex-shrink-0">{Object.keys(fileTests).length} tests</span>
+                                      </div>
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent className="bg-[#1e1e1e]">
+                                      <ul>
+                                        {Object.entries(fileTests).map(([testName, steps]) => {
+                                          const sanitizedTestName = testName
+                                            .replace(/[\s\\/?:*|"<>.]/g, "_")
+                                            .replace(/_+/g, "_");
+                                          const status = testStatuses[sanitizedTestName] || "unknown";
+                                          
+                                          return (
+                                            <li key={`${fileName}-${testName}`}>
+                                              <div
+                                                className={`px-4 py-2 hover:bg-[#2a2d2e] cursor-pointer flex justify-between items-center overflow-hidden ${
+                                                  selectedDebugTest === steps ? "bg-[#37373d]" : ""
+                                                }`}
+                                                onClick={() => handleDebugTestSelect(steps)}
+                                                title={`Status: ${status}`}
+                                              >
+                                                <div className="flex items-center space-x-2 min-w-0 flex-1">
+                                                  {status === "passed" ? (
+                                                    <svg
+                                                      xmlns="http://www.w3.org/2000/svg"
+                                                      className="w-4 h-4 text-green-500 flex-shrink-0"
+                                                      viewBox="0 0 20 20"
+                                                      fill="currentColor"
+                                                    >
+                                                      <path
+                                                        fillRule="evenodd"
+                                                        d="M16.707 5.293a1 1 0 00-1.414 0L8 12.586 4.707 9.293a1 1 0 10-1.414 1.414l4 4a1 1 0 001.414 0l8-8a1 1 0 000-1.414z"
+                                                        clipRule="evenodd"
+                                                      />
+                                                    </svg>
+                                                  ) : status === "failed" ? (
+                                                    <svg
+                                                      xmlns="http://www.w3.org/2000/svg"
+                                                      className="w-4 h-4 text-red-500 flex-shrink-0"
+                                                      viewBox="0 0 20 20"
+                                                      fill="currentColor"
+                                                    >
+                                                      <path
+                                                        fillRule="evenodd"
+                                                        d="M10 8.586l4.95-4.95a1 1 0 111.415 1.414L11.414 10l4.95 4.95a1 1 0 01-1.415 1.414L10 11.414l-4.95 4.95a1 1 0 01-1.414-1.414L8.586 10 3.636 5.05a1 1 0 011.414-1.414L10 8.586z"
+                                                        clipRule="evenodd"
+                                                      />
+                                                    </svg>
+                                                  ) : (
+                                                    <span className="w-3 h-3 rounded-full bg-gray-400 flex-shrink-0"></span>
+                                                  )}
+                                                  <span className="text-sm truncate">{testName}</span>
+                                                </div>
+                                                <span className="text-xs text-gray-500 ml-2 flex-shrink-0">{steps.length} steps</span>
+                                              </div>
+                                            </li>
+                                          );
+                                        })}
+                                      </ul>
+                                    </CollapsibleContent>
+                                  </Collapsible>
+                                </li>
+                              );
+                            })}
                         </ul>
                       )}
                     </div>
@@ -2750,7 +2849,7 @@ export const Cursor = ({
                 <div className="bg-[#252526] px-4 py-1 text-xs flex items-center justify-between">
                   <div className="flex items-center space-x-4">
                     <span className="font-medium">
-                      TERMINAL {terminalMessage && `- ${terminalMessage}`}
+                      TERMINAL
                     </span>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -2852,7 +2951,7 @@ export const Cursor = ({
                 setMessages={setMessages}
                 apiKey={apiKey}
                 onRequestApiKey={onRequestApiKey}
-                testResults={{}}
+                testResults={parsedTests}
                 serverConfigs={availableServerConfigs}
                 activeServers={activeServers}
                 setActiveServers={setActiveServers}

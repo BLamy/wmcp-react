@@ -72,13 +72,24 @@ export interface ToolResultMessage extends BaseMessage {
 }
 
 // Union type for all message types
-export type Message = UserTextMessage | AssistantTextMessage | ToolCallMessage | ToolResultMessage;
+export type Message =
+  | UserTextMessage
+  | AssistantTextMessage
+  | ToolCallMessage
+  | ToolResultMessage;
 
 // For Anthropic API message format
-export type ContentBlock = 
+export type ContentBlock =
   | { type: "text"; text: string }
-  | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
-  | { type: "document"; title: string; source: { type: "text"; media_type: string; data: string, uri?: string } };
+  | {
+      type: "image";
+      source: { type: "base64"; media_type: string; data: string };
+    }
+  | {
+      type: "document";
+      title: string;
+      source: { type: "text"; media_type: string; data: string; uri?: string };
+    };
 
 export type AnthropicMessage = {
   role: "user" | "assistant";
@@ -155,11 +166,13 @@ export const DEFAULT_TOOLS = [
         },
         start_line_one_indexed: {
           type: "integer",
-          description: "The one-indexed line number to start reading from (inclusive)",
+          description:
+            "The one-indexed line number to start reading from (inclusive)",
         },
         end_line_one_indexed_inclusive: {
           type: "integer",
-          description: "The one-indexed line number to end reading at (inclusive)",
+          description:
+            "The one-indexed line number to end reading at (inclusive)",
         },
         should_read_entire_file: {
           type: "boolean",
@@ -167,7 +180,8 @@ export const DEFAULT_TOOLS = [
         },
         explanation: {
           type: "string",
-          description: "One sentence explanation as to why this tool is being used",
+          description:
+            "One sentence explanation as to why this tool is being used",
         },
       },
       required: ["target_file", "should_read_entire_file"],
@@ -181,11 +195,13 @@ export const DEFAULT_TOOLS = [
       properties: {
         relative_workspace_path: {
           type: "string",
-          description: "Path to list contents of, relative to the workspace root",
+          description:
+            "Path to list contents of, relative to the workspace root",
         },
         explanation: {
           type: "string",
-          description: "One sentence explanation as to why this tool is being used",
+          description:
+            "One sentence explanation as to why this tool is being used",
         },
       },
       required: ["relative_workspace_path"],
@@ -203,7 +219,8 @@ export const DEFAULT_TOOLS = [
         },
         explanation: {
           type: "string",
-          description: "One sentence explanation as to why this command needs to be run",
+          description:
+            "One sentence explanation as to why this command needs to be run",
         },
         is_background: {
           type: "boolean",
@@ -211,7 +228,8 @@ export const DEFAULT_TOOLS = [
         },
         require_user_approval: {
           type: "boolean",
-          description: "Whether the user must approve the command before it is executed",
+          description:
+            "Whether the user must approve the command before it is executed",
         },
       },
       required: ["command"],
@@ -259,21 +277,33 @@ export const DEFAULT_TOOLS = [
     },
   },
   {
-    name: "get_test_results",
-    description: "Get the results of tests that have been run",
+    name: "getFailingTests",
+    description:
+      "Retrieves a list of identifiers for all tests that are currently failing in the project. The identifiers can be used with other tools like 'getRuntimeValuesForTest'.",
+    input_schema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "getTestStory",
+    description:
+      "Get the story of a specific test execution. Use this to debug a test that failed.",
     input_schema: {
       type: "object",
       properties: {
-        file_path: {
+        file: {
           type: "string",
-          description: "Optional file path to filter test results for a specific file",
+          description:
+            "File path containing the expression where the breakpoint or relevant code line is located.",
         },
-        status: {
+        testName: {
           type: "string",
-          description: "Optional filter by test status ('pass' or 'fail')",
-        },
+          description: "The name of the test to inspect variables at.",
+        }
       },
-      required: [],
+      required: ["file", "testName"],
     },
   },
 ];
@@ -333,7 +363,8 @@ interface UseWebContainerAgentProps {
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Helper to generate unique IDs
-const generateId = () => `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+const generateId = () =>
+  `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
 export function useWebContainerAgent({
   callLLM,
@@ -355,15 +386,15 @@ export function useWebContainerAgent({
   const messageQueue = useRef<(string | ContentBlock[])[]>([]);
   const testResults = useRef<any>(null);
   const currentFileRef = useRef<string | null>(null);
-  
+
   // Add a ref to keep track of the current tools
   const currentTools = useRef(tools);
-  
+
   // Update tools ref when tools prop changes
   useEffect(() => {
     currentTools.current = tools;
   }, [tools]);
-  
+
   // Function to update tools after initialization
   const updateTools = (newTools: any[]) => {
     currentTools.current = newTools;
@@ -379,18 +410,20 @@ export function useWebContainerAgent({
       return false;
     }
   };
-  
+
   // For file existence:
   const fileExists = async (path: string): Promise<boolean> => {
     try {
-      await webContainer?.fs.readFile(path, 'utf-8');
+      await webContainer?.fs.readFile(path, "utf-8");
       return true;
     } catch (error) {
       return false;
     }
   };
 
-  const formatMessagesForAPI = (messagesToFormat: Message[]): AnthropicMessage[] => {
+  const formatMessagesForAPI = (
+    messagesToFormat: Message[]
+  ): AnthropicMessage[] => {
     const formattedMessages: AnthropicMessage[] = [];
     let currentRole: "user" | "assistant" | null = null;
     let currentContent: string | ContentBlock[] = "";
@@ -398,10 +431,15 @@ export function useWebContainerAgent({
 
     // Helper to add the current message and reset
     const addMessage = () => {
-      if (currentRole && (typeof currentContent === "string" ? currentContent.trim() : currentContent.length > 0)) {
+      if (
+        currentRole &&
+        (typeof currentContent === "string"
+          ? currentContent.trim()
+          : currentContent.length > 0)
+      ) {
         formattedMessages.push({
           role: currentRole,
-          content: currentContent
+          content: currentContent,
         });
       }
       currentContent = "";
@@ -415,35 +453,34 @@ export function useWebContainerAgent({
         if (currentRole) {
           addMessage();
         }
-        
+
         // Add tool call as assistant message
         const toolArgs = JSON.stringify(message.toolCall.arguments, null, 2);
         const toolCallContent = `I'll use the ${message.toolCall.name} tool.\nInput: ${toolArgs}`;
         formattedMessages.push({
           role: "assistant",
-          content: toolCallContent
+          content: toolCallContent,
         });
-        
+
         // Reset
         currentRole = null;
         continue;
-      } 
-      else if (message.type === "tool_result") {
+      } else if (message.type === "tool_result") {
         // If there's a pending message, add it
         if (currentRole) {
           addMessage();
         }
-        
+
         // Add tool result as user message
         let resultContent = "";
         if (message.result.status === "success") {
           resultContent = `Tool ${message.toolCallId} completed successfully: ${message.result.message}`;
-          
+
           // Include content if available
           if (message.result.content) {
             resultContent += `\nOutput: ${message.result.content}`;
           }
-          
+
           // Include command output if available
           if (message.result.output) {
             resultContent += `\nCommand output: ${message.result.output}`;
@@ -451,18 +488,19 @@ export function useWebContainerAgent({
         } else {
           resultContent = `Tool ${message.toolCallId} failed: ${message.result.error}`;
         }
-        
+
         formattedMessages.push({
           role: "user",
-          content: resultContent
+          content: resultContent,
         });
-        
+
         // Reset
         currentRole = null;
         continue;
       }
 
-      const role: "user" | "assistant" = message.type === "user_message" ? "user" : "assistant";
+      const role: "user" | "assistant" =
+        message.type === "user_message" ? "user" : "assistant";
 
       // If role changed, push previous message
       if (currentRole !== role) {
@@ -471,7 +509,10 @@ export function useWebContainerAgent({
       }
 
       // Special case for array content (multipart messages with images)
-      if (typeof message.content !== "string" && Array.isArray(message.content)) {
+      if (
+        typeof message.content !== "string" &&
+        Array.isArray(message.content)
+      ) {
         // If we have an array of content blocks, just use it directly
         currentContent = message.content as ContentBlock[];
         isContentArray = true;
@@ -479,7 +520,9 @@ export function useWebContainerAgent({
         // Only append if current content is not an array
         // For string content, concatenate with a newline if needed
         if (typeof currentContent === "string") {
-          currentContent = currentContent ? `${currentContent}\n${message.content}` : message.content;
+          currentContent = currentContent
+            ? `${currentContent}\n${message.content}`
+            : message.content;
         }
       }
     }
@@ -497,7 +540,7 @@ export function useWebContainerAgent({
       }
 
       conversationInProgress.current = true;
-      
+
       // Create user message object
       const userMessageObj: UserTextMessage = {
         id: generateId(),
@@ -507,25 +550,27 @@ export function useWebContainerAgent({
       };
 
       // Add user message to messages
-      setMessages(prev => [...prev, userMessageObj]);
-      
+      setMessages((prev) => [...prev, userMessageObj]);
+
       // Continue the conversation with the new user message
       await continueConversation([...messages, userMessageObj]);
     } catch (error) {
       console.error("Error in processUserMessage:", error);
-      
+
       // Add error message
       const errorMessage: AssistantTextMessage = {
         id: generateId(),
         type: "assistant_message",
-        content: `Error: ${error instanceof Error ? error.message : "An unknown error occurred"}`,
+        content: `Error: ${
+          error instanceof Error ? error.message : "An unknown error occurred"
+        }`,
         timestamp: new Date(),
       };
-      
-      setMessages(prev => [...prev, errorMessage]);
+
+      setMessages((prev) => [...prev, errorMessage]);
     } finally {
       conversationInProgress.current = false;
-      
+
       // Process next message in queue if any
       if (messageQueue.current.length > 0) {
         const nextMessage = messageQueue.current.shift();
@@ -541,11 +586,15 @@ export function useWebContainerAgent({
     try {
       // Format messages for the API
       const formattedMessages = formatMessagesForAPI(currentMessages);
-      
+
       // Call the LLM
       let response;
       try {
-        console.log('LLM Request:', JSON.stringify(formattedMessages, null, 2), JSON.stringify(currentTools.current, null, 2));
+        console.log(
+          "LLM Request:",
+          JSON.stringify(formattedMessages, null, 2),
+          JSON.stringify(currentTools.current, null, 2)
+        );
         response = await callLLM(
           formattedMessages,
           systemPrompt,
@@ -556,11 +605,11 @@ export function useWebContainerAgent({
         console.error("Error calling LLM:", error);
         throw error;
       }
-      
+
       // Track if we need to continue the conversation
       let shouldContinue = false;
       let newMessages: Message[] = [...currentMessages];
-      
+
       // Process the response
       if (response && response.content) {
         // Handle different Anthropic response formats
@@ -576,7 +625,7 @@ export function useWebContainerAgent({
                 timestamp: new Date(),
               };
               newMessages = [...newMessages, assistantMessage];
-              setMessages(prev => [...prev, assistantMessage]);
+              setMessages((prev) => [...prev, assistantMessage]);
             } else if (contentItem.type === "tool_use") {
               // Handle tool use
               const toolCall: ToolCall = {
@@ -584,20 +633,23 @@ export function useWebContainerAgent({
                 name: contentItem.name,
                 arguments: contentItem.input,
               };
-              
+
               const toolCallMessage: ToolCallMessage = {
                 id: generateId(),
                 type: "tool_call",
                 toolCall,
                 timestamp: new Date(),
               };
-              
+
               newMessages = [...newMessages, toolCallMessage];
-              setMessages(prev => [...prev, toolCallMessage]);
-              
+              setMessages((prev) => [...prev, toolCallMessage]);
+
               // Execute the tool and get the result
-              const result = await handleToolCall(contentItem.name, contentItem.input);
-              
+              const result = await handleToolCall(
+                contentItem.name,
+                contentItem.input
+              );
+
               // Create tool result message
               const toolResultMessage: ToolResultMessage = {
                 id: generateId(),
@@ -606,10 +658,10 @@ export function useWebContainerAgent({
                 result,
                 timestamp: new Date(),
               };
-              
+
               newMessages = [...newMessages, toolResultMessage];
-              setMessages(prev => [...prev, toolResultMessage]);
-              
+              setMessages((prev) => [...prev, toolResultMessage]);
+
               // Set flag to continue the conversation
               shouldContinue = true;
             }
@@ -623,8 +675,12 @@ export function useWebContainerAgent({
             timestamp: new Date(),
           };
           newMessages = [...newMessages, assistantMessage];
-          setMessages(prev => [...prev, assistantMessage]);
-        } else if (response.type === "message" && response.content && response.role === "assistant") {
+          setMessages((prev) => [...prev, assistantMessage]);
+        } else if (
+          response.type === "message" &&
+          response.content &&
+          response.role === "assistant"
+        ) {
           // Handle Anthropic v1/messages format
           if (Array.isArray(response.content)) {
             for (const item of response.content) {
@@ -636,27 +692,27 @@ export function useWebContainerAgent({
                   timestamp: new Date(),
                 };
                 newMessages = [...newMessages, assistantMessage];
-                setMessages(prev => [...prev, assistantMessage]);
+                setMessages((prev) => [...prev, assistantMessage]);
               } else if (item.type === "tool_use") {
                 const toolCall: ToolCall = {
                   id: item.id,
                   name: item.name,
                   arguments: item.input,
                 };
-                
+
                 const toolCallMessage: ToolCallMessage = {
                   id: generateId(),
                   type: "tool_call",
                   toolCall,
                   timestamp: new Date(),
                 };
-                
+
                 newMessages = [...newMessages, toolCallMessage];
-                setMessages(prev => [...prev, toolCallMessage]);
-                
+                setMessages((prev) => [...prev, toolCallMessage]);
+
                 // Execute the tool and get the result
                 const result = await handleToolCall(item.name, item.input);
-                
+
                 // Create tool result message
                 const toolResultMessage: ToolResultMessage = {
                   id: generateId(),
@@ -665,19 +721,23 @@ export function useWebContainerAgent({
                   result,
                   timestamp: new Date(),
                 };
-                
+
                 newMessages = [...newMessages, toolResultMessage];
-                setMessages(prev => [...prev, toolResultMessage]);
-                
+                setMessages((prev) => [...prev, toolResultMessage]);
+
                 // Set flag to continue the conversation
                 shouldContinue = true;
               }
             }
           }
-        } else if (response.role === "assistant" && response.model && response.id) {
+        } else if (
+          response.role === "assistant" &&
+          response.model &&
+          response.id
+        ) {
           // Handle Claude 3 messages API format
           const responseContent = response.content;
-          
+
           if (Array.isArray(responseContent)) {
             for (const item of responseContent) {
               if (item.type === "text") {
@@ -688,27 +748,27 @@ export function useWebContainerAgent({
                   timestamp: new Date(),
                 };
                 newMessages = [...newMessages, assistantMessage];
-                setMessages(prev => [...prev, assistantMessage]);
+                setMessages((prev) => [...prev, assistantMessage]);
               } else if (item.type === "tool_use") {
                 const toolCall: ToolCall = {
                   id: item.id,
                   name: item.name,
                   arguments: item.input,
                 };
-                
+
                 const toolCallMessage: ToolCallMessage = {
                   id: generateId(),
                   type: "tool_call",
                   toolCall,
                   timestamp: new Date(),
                 };
-                
+
                 newMessages = [...newMessages, toolCallMessage];
-                setMessages(prev => [...prev, toolCallMessage]);
-                
+                setMessages((prev) => [...prev, toolCallMessage]);
+
                 // Execute the tool and get the result
                 const result = await handleToolCall(item.name, item.input);
-                
+
                 // Create tool result message
                 const toolResultMessage: ToolResultMessage = {
                   id: generateId(),
@@ -717,10 +777,10 @@ export function useWebContainerAgent({
                   result,
                   timestamp: new Date(),
                 };
-                
+
                 newMessages = [...newMessages, toolResultMessage];
-                setMessages(prev => [...prev, toolResultMessage]);
-                
+                setMessages((prev) => [...prev, toolResultMessage]);
+
                 // Set flag to continue the conversation
                 shouldContinue = true;
               }
@@ -728,13 +788,16 @@ export function useWebContainerAgent({
           }
         }
       }
-      
+
       // Continue the conversation with the LLM if there were tool calls
       if (shouldContinue) {
         // Add a small delay to avoid rate limits
         await delay(100);
-        
-        console.log("Continuing conversation after tool call with messages:", newMessages.length);
+
+        console.log(
+          "Continuing conversation after tool call with messages:",
+          newMessages.length
+        );
         await continueConversation(newMessages);
       }
     } catch (error) {
@@ -749,7 +812,7 @@ export function useWebContainerAgent({
       messageQueue.current.push(userMessage);
       return;
     }
-    
+
     setIsProcessing(true);
     try {
       await processUserMessage(userMessage);
@@ -761,31 +824,42 @@ export function useWebContainerAgent({
   };
 
   // The tool handling is the key difference from useSandpackAgent - it uses WebContainer APIs
-  const handleToolCall = async (name: string, input: any): Promise<ToolResult> => {
+  const handleToolCall = async (
+    name: string,
+    input: any
+  ): Promise<ToolResult> => {
     // First check if we have a proper WebContainer instance
     if (!webContainer) {
       console.error("WebContainer not initialized, cannot execute tool:", name);
       return {
         status: "error",
-        error: "WebContainer not initialized. Please wait for WebContainer to load and try again."
+        error:
+          "WebContainer not initialized. Please wait for WebContainer to load and try again.",
       };
     }
 
     // Check if WebContainer is ready and accessible
     try {
       // Light probe to see if WebContainer proxy is still usable
-      await webContainer.fs.readdir('/');
+      await webContainer.fs.readdir("/");
     } catch (error) {
-      console.error("WebContainer proxy error, container may have been released:", error);
+      console.error(
+        "WebContainer proxy error, container may have been released:",
+        error
+      );
       return {
         status: "error",
-        error: "WebContainer appears to be unavailable or has been released. Try refreshing the page and restarting your WebContainer."
+        error:
+          "WebContainer appears to be unavailable or has been released. Try refreshing the page and restarting your WebContainer.",
       };
     }
 
     try {
       // Check if it's a MCP tool that needs to be executed through the MCP server
-      if (window.mcpExecuteTool && typeof window.mcpExecuteTool === 'function') {
+      if (
+        window.mcpExecuteTool &&
+        typeof window.mcpExecuteTool === "function"
+      ) {
         // This is a workaround to access MCP tools - we set a global executeTool function
         // that WebContainerAgent component can set when MCP tools are available
         try {
@@ -795,7 +869,7 @@ export function useWebContainerAgent({
             return {
               status: "success",
               message: `MPC tool ${name} executed successfully`,
-              ...mpcResult
+              ...mpcResult,
             };
           }
         } catch (error) {
@@ -808,24 +882,27 @@ export function useWebContainerAgent({
       switch (name) {
         case "edit_file": {
           const { file_path, content } = input;
-          
+
           // Get the old content for diff view if the file exists
           let oldContent = "";
           try {
-            oldContent = await webContainer.fs.readFile(file_path, 'utf-8');
+            oldContent = await webContainer.fs.readFile(file_path, "utf-8");
           } catch (error) {
             // File might not exist, which is fine for new files
             console.log(`File ${file_path} not found, will create it.`);
           }
 
           // Make sure the parent directory exists
-          const dirPath = file_path.substring(0, file_path.lastIndexOf('/'));
+          const dirPath = file_path.substring(0, file_path.lastIndexOf("/"));
           if (dirPath) {
             try {
               await webContainer.fs.mkdir(dirPath, { recursive: true });
             } catch (error) {
               // Directory might already exist, which is fine
-              console.log(`Directory ${dirPath} already exists or couldn't be created:`, error);
+              console.log(
+                `Directory ${dirPath} already exists or couldn't be created:`,
+                error
+              );
             }
           }
 
@@ -844,30 +921,34 @@ export function useWebContainerAgent({
             console.error(`Error writing to file ${file_path}:`, error);
             return {
               status: "error",
-              error: `Failed to write to file ${file_path}: ${error?.message || "Unknown error"}`
+              error: `Failed to write to file ${file_path}: ${
+                error?.message || "Unknown error"
+              }`,
             };
           }
         }
-        
+
         case "create_file": {
           const { file_path, content } = input;
-          
+
           try {
             // Make sure the parent directory exists
-            const dirPath = file_path.substring(0, file_path.lastIndexOf('/'));
+            const dirPath = file_path.substring(0, file_path.lastIndexOf("/"));
             if (dirPath) {
               try {
                 await webContainer.fs.mkdir(dirPath, { recursive: true });
               } catch (error) {
                 // Directory might already exist, which is fine
-                console.log(`Directory ${dirPath} already exists or couldn't be created.`);
+                console.log(
+                  `Directory ${dirPath} already exists or couldn't be created.`
+                );
               }
             }
 
             // Check if file already exists
             let fileExists = false;
             try {
-              await webContainer.fs.readFile(file_path, 'utf-8');
+              await webContainer.fs.readFile(file_path, "utf-8");
               fileExists = true;
             } catch (error) {
               // File doesn't exist, which is what we want for create
@@ -882,27 +963,32 @@ export function useWebContainerAgent({
 
             return {
               status: "success",
-              message: `File ${file_path} created successfully`,
-              content,
+              message: `File ${file_path} created successfully: ${JSON.stringify({
+                content,
+              })}`,
             };
           } catch (error: any) {
             console.error(`Error creating file ${file_path}:`, error);
             return {
               status: "error",
-              error: `Failed to create file ${file_path}: ${error?.message || "Unknown error"}`
+              error: `Failed to create file ${file_path}: ${
+                error?.message || "Unknown error"
+              }`,
             };
           }
         }
-        
+
         case "delete_file": {
           const { file_path } = input;
-          
+
           // Get the content before deletion
           let deletedContent = "";
           try {
-            deletedContent = await webContainer.fs.readFile(file_path, 'utf-8');
+            deletedContent = await webContainer.fs.readFile(file_path, "utf-8");
           } catch (error) {
-            throw new Error(`File ${file_path} does not exist or cannot be read`);
+            throw new Error(
+              `File ${file_path} does not exist or cannot be read`
+            );
           }
 
           // Delete the file
@@ -914,64 +1000,95 @@ export function useWebContainerAgent({
             deletedContent,
           };
         }
-        
+
         case "read_file": {
-          const { target_file, start_line_one_indexed, end_line_one_indexed_inclusive, should_read_entire_file } = input;
-          
+          const {
+            target_file,
+            start_line_one_indexed,
+            end_line_one_indexed_inclusive,
+            should_read_entire_file,
+          } = input;
+
           try {
-            const fileContent = await webContainer.fs.readFile(target_file, 'utf-8');
-            const fileLines = fileContent.split('\n');
-            
+            const fileContent = await webContainer.fs.readFile(
+              target_file,
+              "utf-8"
+            );
+            const fileLines = fileContent.split("\n");
+
             if (should_read_entire_file) {
               return {
                 status: "success",
-                message: `File ${target_file} read successfully`,
+                message: `File ${target_file} read successfully: ${JSON.stringify({
+                  content: fileContent,
+                  lineCount: fileLines.length,
+                })}`,
                 content: fileContent,
                 lineCount: fileLines.length,
               };
             } else {
               // Adjust for 1-indexed to 0-indexed
               const startIdx = Math.max(0, (start_line_one_indexed || 1) - 1);
-              const endIdx = Math.min(fileLines.length - 1, (end_line_one_indexed_inclusive || fileLines.length) - 1);
-              
+              const endIdx = Math.min(
+                fileLines.length - 1,
+                (end_line_one_indexed_inclusive || fileLines.length) - 1
+              );
+
               if (startIdx > endIdx) {
-                throw new Error(`Invalid line range: ${start_line_one_indexed} to ${end_line_one_indexed_inclusive}`);
+                throw new Error(
+                  `Invalid line range: ${start_line_one_indexed} to ${end_line_one_indexed_inclusive}`
+                );
               }
-              
+
               const selectedLines = fileLines.slice(startIdx, endIdx + 1);
-              
+
               return {
                 status: "success",
-                message: `File ${target_file} lines ${start_line_one_indexed} to ${end_line_one_indexed_inclusive} read successfully`,
-                content: selectedLines.join('\n'),
-                lineRange: {
-                  start: start_line_one_indexed || 1,
-                  end: end_line_one_indexed_inclusive || fileLines.length,
-                },
-                totalLines: fileLines.length,
+                message: `File ${target_file} lines ${start_line_one_indexed} to ${end_line_one_indexed_inclusive} read successfully: ${JSON.stringify({
+                  content: selectedLines.join("\n"),
+                  lineRange: {
+                    start: start_line_one_indexed || 1,
+                    end: end_line_one_indexed_inclusive || fileLines.length,
+                  },
+                  totalLines: fileLines.length,
+                })}`,
               };
             }
           } catch (error) {
-            throw new Error(`File ${target_file} does not exist or cannot be read`);
+            throw new Error(
+              `File ${target_file} does not exist or cannot be read`
+            );
           }
         }
-        
+
         case "list_dir": {
           const { relative_workspace_path } = input;
-          const dirPath = relative_workspace_path === '/' ? '/' : relative_workspace_path.endsWith('/') 
-            ? relative_workspace_path 
-            : `${relative_workspace_path}/`;
+          // Normalize path: treat "." or "./" as root
+          let dirPath = relative_workspace_path.trim();
+          if (dirPath === "." || dirPath === "./") dirPath = "/";
+          // Ensure it starts with a leading slash (WebContainer fs is always absolute)
+          if (!dirPath.startsWith("/")) {
+            dirPath = `/${dirPath}`;
+          }
+          // Ensure trailing slash for consistency
+          if (!dirPath.endsWith("/")) {
+            dirPath += "/";
+          }
+
+          console.log(`list_dir: listing path -> ${dirPath}`);
           
           try {
-            const dirEntries = await webContainer.fs.readdir(dirPath.startsWith('/') ? dirPath : `/${dirPath}`);
+            const dirEntries = await webContainer.fs.readdir(dirPath);
+            console.log(`list_dir: found ${dirEntries.length} entries in ${dirPath}`);
             
             // For each entry, determine if it's a file or directory
             const processedEntries = await Promise.all(dirEntries.map(async (entry) => {
-              const fullPath = dirPath === '/' ? `/${entry}` : `${dirPath}${entry}`;
+              const fullPath = dirPath === "/" ? `/${entry}` : `${dirPath}${entry}`;
               try {
+                const isDir = await isDirectory(fullPath);
                 return {
                   name: entry,
-                  type: await isDirectory(fullPath) ? 'directory' : 'file',
+                  type: isDir ? 'directory' : 'file',
                   path: fullPath
                 };
               } catch (error) {
@@ -985,54 +1102,55 @@ export function useWebContainerAgent({
             
             return {
               status: "success",
-              message: `Directory ${dirPath} listed successfully`,
+              message: `Directory ${dirPath} listed successfully: ${JSON.stringify(processedEntries)}`,
               files: processedEntries,
               path: dirPath,
             };
           } catch (error) {
+            console.error(`list_dir error for ${dirPath}:`, error);
             throw new Error(`Directory ${dirPath} does not exist or cannot be read`);
           }
         }
-        
+
         case "run_terminal_cmd": {
           const { command, is_background, require_user_approval } = input;
-          
+
           // Split command into command and args
-          const [cmd, ...args] = command.split(' ');
-          
+          const [cmd, ...args] = command.split(" ");
+
           // Get user approval if required
           if (require_user_approval) {
             // Here you would implement a UI to get user approval
             // For now, we'll just simulate approval
             console.log(`Requiring approval for command: ${command}`);
           }
-          
+
           // Run the command
           const process = await webContainer.spawn(cmd, args);
-          
+
           let output = "";
-          
+
           // Capture the output
           const outputStream = new WritableStream({
             write(data) {
               output += data;
-            }
+            },
           });
-          
+
           process.output.pipeTo(outputStream);
-          
+
           // If background, don't wait for completion
           if (is_background) {
             return {
               status: "success",
-              message: `Command "${command}" started in background`,
+              message: `Command "${command}" started in background: ${JSON.stringify(process)}`,
               command,
             };
           }
-          
+
           // Wait for the process to complete
           const exitCode = await process.exit;
-          
+
           if (exitCode !== 0) {
             return {
               status: "error",
@@ -1041,7 +1159,7 @@ export function useWebContainerAgent({
               output,
             };
           }
-          
+
           return {
             status: "success",
             message: `Command "${command}" completed successfully`,
@@ -1049,25 +1167,25 @@ export function useWebContainerAgent({
             output,
           };
         }
-        
+
         case "grep_search": {
-          const { query, include_pattern, exclude_pattern, case_sensitive } = input;
-          
+          const { query, include_pattern, exclude_pattern, case_sensitive } =
+            input;
+
           // This is a simplified implementation
           // In a real-world scenario, you would use a proper grep tool or recursively search files
-          
+
           // First, get all files recursively
-          const getAllFiles = async (dir: string = '/'): Promise<string[]> => {
+          const getAllFiles = async (dir: string = "/"): Promise<string[]> => {
             const dirEntries = await webContainer.fs.readdir(dir);
             let files: string[] = [];
-            
+
             for (const entry of dirEntries) {
-              if (entry === 'node_modules' || entry === '.git') continue;
-              
-              const fullPath = dir === '/' ? `/${entry}` : `${dir}/${entry}`;
-              
+              if (entry === "node_modules" || entry === ".git") continue;
+
+              const fullPath = dir === "/" ? `/${entry}` : `${dir}/${entry}`;
+
               try {
-                
                 if (await isDirectory(fullPath)) {
                   files = files.concat(await getAllFiles(fullPath));
                 } else {
@@ -1077,52 +1195,76 @@ export function useWebContainerAgent({
                 console.error(`Error getting stats for ${fullPath}:`, error);
               }
             }
-            
+
             return files;
           };
-          
+
           const allFiles = await getAllFiles();
-          
+
           // Filter files based on include/exclude patterns
           let searchableFiles = allFiles;
-          
+
           if (include_pattern) {
-            const includeRegex = new RegExp(include_pattern.replace(/\*/g, '.*'));
-            searchableFiles = searchableFiles.filter(file => includeRegex.test(file));
+            const includeRegex = new RegExp(
+              include_pattern.replace(/\*/g, ".*")
+            );
+            searchableFiles = searchableFiles.filter((file) =>
+              includeRegex.test(file)
+            );
           }
-          
+
           if (exclude_pattern) {
-            const excludeRegex = new RegExp(exclude_pattern.replace(/\*/g, '.*'));
-            searchableFiles = searchableFiles.filter(file => !excludeRegex.test(file));
+            const excludeRegex = new RegExp(
+              exclude_pattern.replace(/\*/g, ".*")
+            );
+            searchableFiles = searchableFiles.filter(
+              (file) => !excludeRegex.test(file)
+            );
           }
-          
+
           // Create a RegExp for the search
-          const regexFlags = case_sensitive ? 'g' : 'gi';
+          const regexFlags = case_sensitive ? "g" : "gi";
           const searchRegex = new RegExp(query, regexFlags);
-          
+
           // Search each file for the pattern
-          const results: Array<{file: string, matches: Array<{line: number, content: string, matches: Array<{text: string, index: number | undefined}>}>}> = [];
-          
+          const results: Array<{
+            file: string;
+            matches: Array<{
+              line: number;
+              content: string;
+              matches: Array<{ text: string; index: number | undefined }>;
+            }>;
+          }> = [];
+
           for (const filePath of searchableFiles) {
             try {
-              const fileContent = await webContainer.fs.readFile(filePath, 'utf-8');
-              const fileLines = fileContent.split('\n');
-              
-              let matches: Array<{line: number, content: string, matches: Array<{text: string, index: number | undefined}>}> = [];
-              
+              const fileContent = await webContainer.fs.readFile(
+                filePath,
+                "utf-8"
+              );
+              const fileLines = fileContent.split("\n");
+
+              let matches: Array<{
+                line: number;
+                content: string;
+                matches: Array<{ text: string; index: number | undefined }>;
+              }> = [];
+
               fileLines.forEach((line, lineIndex) => {
                 if (line.match(searchRegex)) {
                   matches.push({
                     line: lineIndex + 1, // Convert to 1-indexed
                     content: line,
-                    matches: Array.from(line.matchAll(searchRegex)).map(match => ({
-                      text: match[0],
-                      index: match.index,
-                    })),
+                    matches: Array.from(line.matchAll(searchRegex)).map(
+                      (match) => ({
+                        text: match[0],
+                        index: match.index,
+                      })
+                    ),
                   });
                 }
               });
-              
+
               if (matches.length > 0) {
                 results.push({
                   file: filePath,
@@ -1133,29 +1275,29 @@ export function useWebContainerAgent({
               console.error(`Error searching file ${filePath}:`, error);
             }
           }
-          
+
           return {
             status: "success",
-            message: `Found ${results.length} files with matches for "${query}"`,
+            message: `Found ${results.length} files with matches for "${query}": ${JSON.stringify(results)}`,
             query,
             results,
           };
         }
-        
+
         case "file_search": {
           const { query } = input;
-          
+
           // Get all files recursively
-          const getAllFiles = async (dir: string = '/'): Promise<string[]> => {
+          const getAllFiles = async (dir: string = "/"): Promise<string[]> => {
             const dirEntries = await webContainer.fs.readdir(dir);
             let files: string[] = [];
-            
+
             for (const entry of dirEntries) {
-              if (entry === 'node_modules' || entry === '.git') continue;
-              
-              const fullPath = dir === '/' ? `/${entry}` : `${dir}/${entry}`;
-              
-              try {                
+              if (entry === "node_modules" || entry === ".git") continue;
+
+              const fullPath = dir === "/" ? `/${entry}` : `${dir}/${entry}`;
+
+              try {
                 if (await isDirectory(fullPath)) {
                   files = files.concat(await getAllFiles(fullPath));
                 } else {
@@ -1165,64 +1307,149 @@ export function useWebContainerAgent({
                 console.error(`Error getting stats for ${fullPath}:`, error);
               }
             }
-            
+
             return files;
           };
-          
+
           const allFiles = await getAllFiles();
-          
+
           // Simple fuzzy search implementation
-          const matchingFiles = allFiles.filter(filePath => {
+          const matchingFiles = allFiles.filter((filePath) => {
             return filePath.toLowerCase().includes(query.toLowerCase());
           });
-          
+
           return {
             status: "success",
-            message: `Found ${matchingFiles.length} files matching "${query}"`,
+            message: `Found ${matchingFiles.length} files matching "${query}": ${JSON.stringify(matchingFiles)}`,
             query,
             files: matchingFiles,
           };
         }
-        
-        case "get_test_results": {
-          const { file_path, status } = input;
-          
-          // Return the cached test results, optionally filtered by file_path and status
-          let filteredResults = { ...testResults.current };
-          
-          if (file_path) {
-            filteredResults = Object.keys(filteredResults)
-              .filter(key => key === file_path || key.includes(file_path))
-              .reduce((obj, key) => {
-                obj[key] = filteredResults[key];
-                return obj;
-              }, {} as any);
-          }
-          
-          if (status) {
-            // This would require more complex filtering logic depending on your test result structure
-            // For now, we'll just return a simple message
+
+        case "getFailingTests": {
+          try {
+            // First try to load Vitest coverage summary if it exists
+            const coveragePath = "/.blamy/coverage/vitest-coverage.json";
+            let failing: string[] = [];
+            try {
+              const covRaw = await webContainer.fs.readFile(coveragePath, "utf-8");
+              const covJson = JSON.parse(covRaw);
+              if (Array.isArray(covJson.testResults)) {
+                covJson.testResults.forEach((suite: any) => {
+                  if (suite && Array.isArray(suite.assertionResults)) {
+                    suite.assertionResults.forEach((assert: any) => {
+                      if (assert.status === "failed") {
+                        failing.push(assert.title);
+                      }
+                    });
+                  }
+                });
+              }
+            } catch (covErr) {
+              // Coverage file may not exist; log for debugging but don't treat as fatal
+              console.warn("getFailingTests: unable to read coverage file", coveragePath, covErr);
+            }
+
+            // If still nothing found, fall back to heuristic using cached debug steps
+            if (failing.length === 0) {
+              if (!testResults.current || Object.keys(testResults.current).length === 0) {
+                return {
+                  status: "error",
+                  error: "No test results available, and coverage summary file not found. Run tests to generate debug data or coverage file."
+                };
+              }
+
+              console.log("getFailingTests: falling back to debug steps heuristic");
+              Object.entries(testResults.current as Record<string, any[]>).forEach(([testId, steps]) => {
+                if (!Array.isArray(steps)) return;
+                for (const step of steps) {
+                  if (step?.failed || step?.error) {
+                    failing.push(testId);
+                    break;
+                  }
+                }
+              });
+            }
+
             return {
               status: "success",
-              message: `Filtered test results for status: ${status}`,
-              results: filteredResults,
+              message: `Retrieved ${failing.length} failing test(s): ${JSON.stringify(failing)}`,
+              tests: failing
+            };
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return {
+              status: "error",
+              error: `Failed to retrieve failing tests: ${msg}`
             };
           }
+        }
+
+        case "getTestStory": {
+          const { testName } = input;
+
+          if (!testName) {
+            return {
+              status: "error",
+              error: "Missing required parameter: testName",
+            };
+          }
+          const storyDirectory = `./.timetravel/${testName.replace(/[\s\\/?:*|"<>.]/g, "_").replace(/_+/g, "_")}`;
+          const storyFiles = await webContainer.fs.readdir(storyDirectory);
+
+            // Read all story files and parse them
+            const steps = [];
+            for (const file of storyFiles) {
+              if (file.endsWith('.json')) {
+                try {
+                  const filePath = `${storyDirectory}/${file}`;
+                  const content = await webContainer.fs.readFile(filePath, 'utf-8');
+                  const storyStep = JSON.parse(content);
+                  steps.push(storyStep);
+                } catch (readErr) {
+                  console.error(`Failed to read or parse story file ${file}:`, readErr);
+                }
+              }
+            }
+            
+            // Sort steps by stepNumber
+            steps.sort((a, b) => {
+              const stepA = a.stepNumber !== undefined ? a.stepNumber : 0;
+              const stepB = b.stepNumber !== undefined ? b.stepNumber : 0;
+              return stepA - stepB;
+            });
+          
+          const fileNames = steps.map((step) => step.file.split("/").pop());
+          const fileContents = await Promise.all(fileNames.map(async (fileName) => {
+            const content = await webContainer.fs.readFile(fileName, 'utf-8');
+            return { fileName, content };
+          }));
+
           
           return {
             status: "success",
-            message: "Test results retrieved",
-            results: filteredResults,
+            message: `Retrieved ${steps.length} runtime value(s) for test '${testName}':
+            ${fileContents.map((file) => {
+              return "```"+file.fileName+"\n"+file.content+"\n```\n"
+            }).join("\n")}
+            
+            Test Steps:
+            \`\`\`json
+            ${JSON.stringify(steps, null, 2)}
+            \`\`\`
+            `,
+            values: steps,
           };
         }
-        
+
         default:
           throw new Error(`Unknown tool: ${name}`);
       }
     } catch (error) {
       console.error(`Error executing tool ${name}:`, error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+
       return {
         status: "error",
         error: errorMessage,
@@ -1239,7 +1466,7 @@ export function useWebContainerAgent({
         timestamp: new Date(),
       },
     ]);
-    
+
     // Clear any pending message queue
     messageQueue.current = [];
   };
@@ -1249,21 +1476,24 @@ export function useWebContainerAgent({
     if (messages.length > 0) {
       try {
         // Convert Date objects to strings before saving
-        const serializedMessages = messages.map(msg => ({
+        const serializedMessages = messages.map((msg) => ({
           ...msg,
           timestamp: msg.timestamp.toISOString(),
         }));
-        localStorage.setItem('webcontainerAgentMessages', JSON.stringify(serializedMessages));
+        localStorage.setItem(
+          "webcontainerAgentMessages",
+          JSON.stringify(serializedMessages)
+        );
       } catch (error) {
-        console.error('Error saving messages to localStorage:', error);
+        console.error("Error saving messages to localStorage:", error);
       }
     }
   }, [messages]);
-  
+
   // Effect to restore messages from localStorage on initial load
   useEffect(() => {
     try {
-      const savedMessages = localStorage.getItem('webcontainerAgentMessages');
+      const savedMessages = localStorage.getItem("webcontainerAgentMessages");
       if (savedMessages) {
         const parsedMessages = JSON.parse(savedMessages);
         // Convert string timestamps back to Date objects
@@ -1277,7 +1507,7 @@ export function useWebContainerAgent({
         clearMessages();
       }
     } catch (error) {
-      console.error('Error loading messages from localStorage:', error);
+      console.error("Error loading messages from localStorage:", error);
       clearMessages();
     }
   }, []);
@@ -1303,6 +1533,6 @@ export function useWebContainerAgent({
     updateTestResults,
     setCurrentFile,
     activeFile: currentFileRef.current,
-    updateTools
+    updateTools,
   };
 }
