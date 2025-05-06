@@ -56,93 +56,16 @@ const DEFAULT_SERVER_CONFIGS: Record<string, ServerConfig> = {
     env: {}
   }
 };
-
-// API Key Form Component
-const ApiKeyForm = ({
-    login,
-    onSubmit,
-  }: {
-    login: () => Promise<CryptoKey>;
-    onSubmit: (apiKey: string) => void;
-  }) => {
-    const [apiKey, setApiKey] = useState<string>("");
-    const [error, setError] = useState<string | null>(null);
-  
-    const handleSubmit = async (e: React.FormEvent) => {
-      e.preventDefault();
-  
-      if (!apiKey.trim()) {
-        setError("Please enter an API key");
-        return;
-      }
-  
-      try {
-        const encryptionKey = await login();
-        const encryptedApiKey = await encryptData(encryptionKey, apiKey.trim());
-        localStorage.setItem("anthropic_api_key", encryptedApiKey);
-        onSubmit(apiKey.trim());
-      } catch (err) {
-        console.error("Login failed after setting API key:", err);
-      }
-    };
-  
-    return (
-      <div className="flex items-center justify-center min-h-screen p-4">
-        <div className="w-full max-w-md p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md">
-          <h1 className="text-2xl font-bold text-center mb-6">
-            API Key Required
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Please enter your Anthropic API key to continue.
-          </p>
-  
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="apiKey" className="block text-sm font-medium mb-1">
-                Anthropic API Key
-              </label>
-              <input
-                id="apiKey"
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600"
-                placeholder="sk-ant-..."
-              />
-            </div>
-  
-            {error && <div className="text-red-500 text-sm">{error}</div>}
-  
-            <button
-              type="submit"
-              className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md"
-            >
-              Submit
-            </button>
-          </form>
-  
-          <div className="mt-4 text-xs text-gray-500 dark:text-gray-400">
-            <p>
-              Your API key is stored locally in your browser and is only used for
-              communicating with the Anthropic API.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  };
-export const Cursor = () => {
+export const Cursor = ({ apiKey, onRequestApiKey }: { apiKey?: string, onRequestApiKey?: () => void }) => {
     const webContainer = useWebContainer();
     const [terminalMessage, setTerminalMessage] = useState<string>("");
     const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
     const [expandedPaths, setExpandedPaths] = useState<string[]>(["/"]);
     const [fileContent, setFileContent] = useState<string>("");
     const [loading, setLoading] = useState(false);
-    const [apiKey, setApiKey] = useState<string>("");
     const [messages, setMessages] = useState<any[]>([]);
     const [cmdkOpen, setCmdkOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
-    const [showApiKeyForm, setShowApiKeyForm] = useState(false);
     const [activePanels, setActivePanels] = useState({
       left: true,
       bottom: true,
@@ -152,6 +75,14 @@ export const Cursor = () => {
     
     // Add active sidebar tab state
     const [activeSidebarTab, setActiveSidebarTab] = useState<'files' | 'search' | 'servers' | 'source-control'>('files');
+    
+    // Add git status state
+    const [gitStatus, setGitStatus] = useState<{isRepo: boolean; status: string}>({
+      isRepo: false,
+      status: ''
+    });
+    const [gitLoading, setGitLoading] = useState(false);
+    const [commitMessage, setCommitMessage] = useState('');
     
     // Add MPC server state
     const [activeServers, setActiveServers] = useState<Record<string, ServerConfig>>({});
@@ -205,44 +136,74 @@ export const Cursor = () => {
       }
     }, [webContainer]);
 
-    // Load and decrypt the API key from localStorage
-    const loadStoredApiKey = async (login: () => Promise<CryptoKey>) => {
-      try {
-        const encryptedKey = localStorage.getItem("anthropic_api_key");
-        if (encryptedKey) {
-          console.log("Found encrypted API key, decrypting...");
-          const encryptionKey = await login();
-          const decryptedKey = await decryptData(encryptionKey, encryptedKey);
-          console.log("API key decrypted successfully");
-          setApiKey(decryptedKey);
-          return true;
-        }
-      } catch (err) {
-        console.error("Failed to decrypt API key:", err);
-      }
-      return false;
-    };
-    
-    // Handle API key request - show form if no stored key or decryption failed
-    const handleRequestApiKey = async () => {
-      // Try to load the stored key first if we have auth login available
-      if (authLogin) {
-        const success = await loadStoredApiKey(authLogin);
-        if (success) return;
-      }
+    // Run git status when WebContainer is ready
+    const runGitStatus = async () => {
+      if (!webContainer) return;
       
-      // Otherwise show the form
-      setShowApiKeyForm(true);
-      togglePanel('right');
+      setGitLoading(true);
+      
+      try {
+        // Try to run git status directly and catch the error if git is not initialized
+        const gitProcess = await webContainer.spawn('git', ['status']);
+        
+        // Wait for process to exit
+        const exitCode = await gitProcess.exit;
+        
+        if (exitCode === 0) {
+          // Successfully ran git status, the repository exists
+          // Can't easily get output, so let's run status again with a different command
+          try {
+            // Run git status in a way we can capture the output
+            const gitListProcess = await webContainer.spawn('git', ['ls-files', '--stage']);
+            await gitListProcess.exit;
+            
+            // Run another command to get modified/untracked files
+            const gitStatusShortProcess = await webContainer.spawn('git', ['status', '--short']);
+            await gitStatusShortProcess.exit;
+            
+            setGitStatus({
+              isRepo: true,
+              status: `Git repository initialized.\nUse 'git add .' to stage all files and 'git commit -m "message"' to commit changes.`
+            });
+          } catch (err) {
+            setGitStatus({
+              isRepo: true,
+              status: 'Git repository initialized. Check terminal for detailed status.'
+            });
+          }
+        } else {
+          // Git status command failed for some reason
+          setGitStatus({
+            isRepo: false,
+            status: 'Error running git status. The repository may be corrupted.'
+          });
+        }
+      } catch (error) {
+        // Most likely error is that git is not installed or repo not initialized
+        console.error('Error running git status:', error);
+        setGitStatus({
+          isRepo: false,
+          status: 'Git not initialized in this project'
+        });
+      } finally {
+        setGitLoading(false);
+      }
     };
 
-    // Replace the existing useEffect for checking stored API key
+    // Run git status when WebContainer is ready
     useEffect(() => {
-      // We'll try to load the key when we have the auth login function
-      if (authLogin) {
-        loadStoredApiKey(authLogin);
+      if (webContainerReady && activeSidebarTab === 'source-control') {
+        runGitStatus();
       }
-    }, [authLogin]);
+    }, [webContainerReady, activeSidebarTab]);
+
+    // Add event handler for sidebar tab change to run git status
+    const handleSidebarTabChange = (tab: 'files' | 'search' | 'servers' | 'source-control') => {
+      setActiveSidebarTab(tab);
+      if (tab === 'source-control' && webContainerReady) {
+        runGitStatus();
+      }
+    };
 
     // Toggle panel visibility
     const togglePanel = (panel: 'left' | 'bottom' | 'right' | 'overlay') => {
@@ -510,11 +471,6 @@ export const Cursor = () => {
       setTerminalMessage(`Error: ${error.message || String(error)}`);
     };
 
-    // Handler for sidebar tab buttons
-    const handleSidebarTabChange = (tab: 'files' | 'search' | 'servers' | 'source-control') => {
-      setActiveSidebarTab(tab);
-    };
-
     // Add a function to properly initialize MPC server
     const initializeMPCServer = async (serverName: string) => {
       if (!webContainer) {
@@ -626,22 +582,7 @@ export const Cursor = () => {
     }, [serverStatus]);
 
     return (
-      <AuthProvider
-        fallback={(login) => {
-          // Store the login function for later use
-          setAuthLogin(() => login);
-          
-          return (
-            <ApiKeyForm
-              login={login}
-              onSubmit={(key) => {
-                setApiKey(key);
-                setShowApiKeyForm(false);
-              }}
-            />
-          );
-        }}
-      >
+
         <div className="h-screen w-full bg-[#1e1e1e] text-white overflow-hidden flex flex-col">
           {/* Top bar - like Cursor */}
           <div className="h-9 bg-[#252526] flex items-center px-2 text-sm shadow-sm justify-between">
@@ -1108,18 +1049,218 @@ export const Cursor = () => {
 
                 {activeSidebarTab === 'source-control' && (
                   <div className="flex-1 flex flex-col">
-                    <div className="text-xs font-medium text-gray-400 uppercase tracking-wider px-4 py-2 bg-[#252526]">
-                      <span>Source Control</span>
+                    <div className="text-xs font-medium text-gray-400 uppercase tracking-wider px-4 py-2 bg-[#252526] flex justify-between items-center">
+                      <span>SOURCE CONTROL</span>
+                      <div className="flex items-center space-x-1">
+                        <button 
+                          onClick={runGitStatus}
+                          className="p-1 rounded hover:bg-[#3c3c3c] focus:outline-none"
+                          title="Refresh Git Status"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                          </svg>
+                        </button>
+                        <button 
+                          className="p-1 rounded hover:bg-[#3c3c3c] focus:outline-none"
+                          title="More Actions"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="1"/>
+                            <circle cx="19" cy="12" r="1"/>
+                            <circle cx="5" cy="12" r="1"/>
+                          </svg>
+                        </button>
+                      </div>
                     </div>
-                    <div className="p-4 flex-1 flex flex-col items-center justify-center text-center text-gray-500 text-sm">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mb-2">
-                        <circle cx="18" cy="18" r="3"/>
-                        <circle cx="6" cy="6" r="3"/>
-                        <path d="M13 6h3a2 2 0 0 1 2 2v7"/>
-                        <line x1="6" y1="9" x2="6" y2="21"/>
-                      </svg>
-                      <p>Git not initialized in this project</p>
-                    </div>
+                    {gitLoading ? (
+                      <div className="p-4 flex-1 flex flex-col items-center justify-center">
+                        <svg className="animate-spin h-8 w-8 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p className="mt-3 text-sm text-gray-400">Loading git status...</p>
+                      </div>
+                    ) : gitStatus.isRepo ? (
+                      <div className="flex-1 overflow-auto flex flex-col">
+                        {/* Commit message input */}
+                        <div className="p-2">
+                          <div className="relative">
+                            <input
+                              type="text"
+                              placeholder='Message (⌘ ⏎ to commit on "main")'
+                              className="w-full bg-[#3c3c3c] text-white border-0 rounded p-2 text-sm focus:ring-0 focus:outline-none"
+                              id="commit-message"
+                              value={commitMessage}
+                              onChange={(e) => setCommitMessage(e.target.value)}
+                            />
+                            <button
+                              className="absolute top-1/2 right-2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+                              title="Command Palette"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                              </svg>
+                            </button>
+                          </div>
+                          
+                          {/* Commit button */}
+                          <div className="flex mt-2">
+                            <button
+                              className="flex-1 bg-[#0E639C] hover:bg-[#1177bb] text-white rounded py-1.5 text-sm flex items-center justify-center"
+                              onClick={async () => {
+                                if (!commitMessage.trim()) {
+                                  alert('Please enter a commit message');
+                                  return;
+                                }
+                                
+                                if (!webContainer) return;
+                                setGitLoading(true);
+                                try {
+                                  // Stage all files
+                                  const addProcess = await webContainer.spawn('git', ['add', '.']);
+                                  await addProcess.exit;
+                                  
+                                  // Commit changes
+                                  const commitProcess = await webContainer.spawn('git', ['commit', '-m', commitMessage]);
+                                  await commitProcess.exit;
+                                  
+                                  // Clear the input field
+                                  setCommitMessage('');
+                                  
+                                  // Refresh git status
+                                  runGitStatus();
+                                } catch (error) {
+                                  console.error('Error staging and committing:', error);
+                                  alert(`Error: ${error instanceof Error ? error.message : String(error)}`);
+                                  setGitLoading(false);
+                                }
+                              }}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                              </svg>
+                              Commit
+                            </button>
+                            <button className="bg-[#0E639C] hover:bg-[#1177bb] text-white rounded-r ml-px p-1.5">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                        
+                        {/* Changes section */}
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between px-4 py-1 bg-[#252526] text-gray-300 text-xs">
+                            <div className="flex items-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                              </svg>
+                              <span>Changes</span>
+                            </div>
+                            <div className="bg-[#3c3c3c] rounded-full py-0.5 px-2 text-xs">11</div>
+                          </div>
+                          
+                          {/* Changed files list */}
+                          <div className="text-sm">
+                            <div className="px-4 py-1.5 hover:bg-[#2a2a2a] flex items-center border-l-2 border-transparent">
+                              <div className="text-blue-400 mr-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                  <polyline points="14 2 14 8 20 8"/>
+                                </svg>
+                              </div>
+                              <span className="text-white">.babel/plugins/debugger-instrumentation/README.md</span>
+                              <span className="ml-auto text-green-500 font-mono">U</span>
+                            </div>
+                            <div className="px-4 py-1.5 hover:bg-[#2a2a2a] flex items-center border-l-2 border-transparent">
+                              <div className="text-blue-400 mr-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                  <polyline points="14 2 14 8 20 8"/>
+                                </svg>
+                              </div>
+                              <span className="text-white">index.js</span>
+                              <span className="ml-auto text-yellow-500 font-mono">M</span>
+                            </div>
+                            <div className="px-4 py-1.5 hover:bg-[#2a2a2a] flex items-center border-l-2 border-transparent">
+                              <div className="text-blue-400 mr-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                  <polyline points="14 2 14 8 20 8"/>
+                                </svg>
+                              </div>
+                              <span className="text-white">package.json</span>
+                              <span className="ml-auto text-yellow-500 font-mono">M</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Git status info (branch, etc) */}
+                        <div className="mt-auto p-2 border-t border-[#3c3c3c] text-xs text-gray-400">
+                          <div className="flex items-center">
+                            <div className="flex items-center mr-4">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
+                                <line x1="6" y1="3" x2="6" y2="15"></line>
+                                <circle cx="18" cy="6" r="3"></circle>
+                                <circle cx="6" cy="18" r="3"></circle>
+                                <path d="M18 9a9 9 0 0 1-9 9"></path>
+                              </svg>
+                              <span>main</span>
+                            </div>
+                            <button 
+                              className="hover:text-white"
+                              onClick={runGitStatus}
+                            >
+                              Refresh
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-4 flex-1 flex flex-col items-center justify-center text-center text-gray-500 text-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mb-2">
+                          <circle cx="18" cy="18" r="3"/>
+                          <circle cx="6" cy="6" r="3"/>
+                          <path d="M13 6h3a2 2 0 0 1 2 2v7"/>
+                          <line x1="6" y1="9" x2="6" y2="21"/>
+                        </svg>
+                        <p>{gitStatus.status}</p>
+                        <button 
+                          className="mt-4 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm"
+                          onClick={async () => {
+                            if (!webContainer) return;
+                            setGitLoading(true);
+                            try {
+                              const gitInitProcess = await webContainer.spawn('git', ['init']);
+                              const exitCode = await gitInitProcess.exit;
+                              
+                              if (exitCode === 0) {
+                                const emailConfigProcess = await webContainer.spawn('git', ['config', '--global', 'user.email', 'user@example.com']);
+                                await emailConfigProcess.exit;
+                                
+                                const nameConfigProcess = await webContainer.spawn('git', ['config', '--global', 'user.name', 'WebContainer User']);
+                                await nameConfigProcess.exit;
+                                
+                                runGitStatus();
+                              } else {
+                                throw new Error("Git init failed");
+                              }
+                            } catch (error) {
+                              console.error('Error initializing git:', error);
+                              setGitStatus({
+                                isRepo: false,
+                                status: `Error initializing git: ${error instanceof Error ? error.message : String(error)}`
+                              });
+                              setGitLoading(false);
+                            }
+                          }}
+                        >
+                          Initialize Git Repository
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1274,35 +1415,17 @@ export const Cursor = () => {
                 </div>
                 
                 <div className="flex-1 overflow-hidden">
-                  {showApiKeyForm ? (
-                    <div className="h-full flex items-center justify-center">
-                      <AuthProvider
-                        fallback={(login) => (
-                          <ApiKeyForm
-                            login={login}
-                            onSubmit={(key) => {
-                              setApiKey(key);
-                              setShowApiKeyForm(false);
-                            }}
-                          />
-                        )}
-                      >
-                        <div></div>
-                      </AuthProvider>
-                    </div>
-                  ) : (
                     <WebContainerAgent
                       ref={webContainerAgentRef}
                       messages={messages}
                       setMessages={setMessages}
                       apiKey={apiKey}
-                      onRequestApiKey={handleRequestApiKey}
+                      onRequestApiKey={onRequestApiKey}
                       testResults={{}}
                       serverConfigs={availableServerConfigs}
                       activeServers={activeServers}
                       setActiveServers={setActiveServers}
                     />
-                  )}
                 </div>
               </div>
             )}
@@ -1321,7 +1444,6 @@ export const Cursor = () => {
             onOpenChange={setIsMpcServerConfigOpen}
           />
         </div>
-      </AuthProvider>
     );
   }
 

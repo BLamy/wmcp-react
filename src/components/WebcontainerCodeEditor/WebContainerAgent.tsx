@@ -394,7 +394,7 @@ function ServerConfigSheet({
 export interface WebContainerAgentProps {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
-  apiKey: string;
+  apiKey?: string;
   onRequestApiKey?: () => void;
   testResults?: any;
   serverConfigs?: Record<string, ServerConfig>;

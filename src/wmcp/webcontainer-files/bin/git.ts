@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 
-import git from 'isomorphic-git';
-import fs from 'fs';
+// Use dynamic import for isomorphic-git to ensure ES module compatibility
+let git: any;
+
+// Import fs using a more ES module friendly approach
+import * as fs from 'fs';
 
 const command = process.argv[2];
 const args = process.argv.slice(3);
@@ -12,6 +15,9 @@ async function getHttp() {
 }
 
 async function main() {
+  // Dynamically import isomorphic-git at runtime
+  git = (await import('isomorphic-git')).default;
+  
   const dir = process.cwd();
 
   try {

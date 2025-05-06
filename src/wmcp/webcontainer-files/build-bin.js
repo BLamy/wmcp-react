@@ -32,7 +32,7 @@ if (files.length === 0) {
   console.error('No JavaScript files found in bin directory. TypeScript compilation may have failed.');
 }
 
-// Make them executable
+// Make them executable and fix ESM issues
 for (const file of files) {
   const filePath = path.join(binDir, file);
   console.log(`Processing ${filePath}...`);
@@ -45,9 +45,21 @@ for (const file of files) {
     if (!content.startsWith('#!/usr/bin/env node')) {
       // Add shebang line if it doesn't exist
       content = '#!/usr/bin/env node\n' + content;
-      fs.writeFileSync(filePath, content);
-      console.log(`Added shebang to ${file}`);
     }
+    
+    // Fix potential ESM/CommonJS compatibility issues
+    // Replace "exports is not defined" errors by transforming CommonJS exports to ESM exports
+    content = content.replace(/exports\.default = (.*?);/g, 'export default $1;');
+    content = content.replace(/module\.exports = (.*?);/g, 'export default $1;');
+    content = content.replace(/exports\.(.*?) = (.*?);/g, 'export const $1 = $2;');
+    
+    // Replace require with dynamic imports
+    content = content.replace(/const (.*?) = require\(['"](.*?)['"]\);/g, 
+      'import $1 from "$2";');
+    
+    // Write the changes back
+    fs.writeFileSync(filePath, content);
+    console.log(`Fixed ESM compatibility in ${file}`);
     
     // Add executable permission (chmod +x)
     fs.chmodSync(filePath, 0o755);

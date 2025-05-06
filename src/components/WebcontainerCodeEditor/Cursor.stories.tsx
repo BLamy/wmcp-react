@@ -1,9 +1,13 @@
+import { useCallback, useRef, useState, useEffect } from "react";
+import React from "react";
 import { Meta, StoryObj } from "@storybook/react";
 import "xterm/css/xterm.css";
 import Cursor from "./Cursor";
+import { SecureFormProvider } from "@/components/Auth/SecureFormProvider";
+import { ApiKeyForm } from "@/components/Auth/ApiKeyForm";
 
 const agentMeta: Meta<typeof Cursor> = {
-  title: "Cursor/Editor",
+  title: "Editors/Cursor Clone",
   component: Cursor,
   parameters: {
     layout: "fullscreen",
@@ -27,25 +31,37 @@ const agentMeta: Meta<typeof Cursor> = {
       },
     },
   },
-  args: {
-    messages: [
-      {
-        id: "1",
-        type: "assistant_message",
-        content: "Hello! I'm your coding assistant. How can I help you today?",
-        timestamp: new Date(),
-      },
-    ],
-    setMessages: () => {},
-    apiKey: "dummy-key",
-    testResults: {},
-  },
 };
 
 type Story = StoryObj<typeof Cursor>;
 
-export const Default: Story = {
+export const ApiKeyAsProp: Story = {
   args: {
+    apiKey: "dummy-key",
   },
 };
+
+export const ApiKeyFromSecureFormProvider: Story = {
+  decorators: [
+    (Story) => (
+        <Story />
+    ),
+  ],
+  render: () => {
+    return (
+      <SecureFormProvider<{apiKey: string}>
+        storageKey="anthropic_api"
+        fallback={(props) => <ApiKeyForm {...props} />}
+      >
+        {({ values, login }) => (
+          <Cursor
+            apiKey={values?.apiKey}
+            onRequestApiKey={login}
+          />
+        )}
+      </SecureFormProvider>
+    );
+  },
+};
+
 export default agentMeta;

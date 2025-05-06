@@ -35,13 +35,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 interface AuthProviderProps {
   children: ReactNode | ((context: AuthContextType) => ReactNode);
   fallback?: (login: () => Promise<CryptoKey>) => ReactNode 
+  forceShowFallback?: boolean
 }
 
 /**
  * Provides authentication state and functions to its children.
  * Manages user login, logout, registration, and the derived encryption key.
  */
-export const AuthProvider = ({ children, fallback }: AuthProviderProps) => {
+export const AuthProvider = ({ children, fallback, forceShowFallback }: AuthProviderProps) => {
   const [encryptionKey, setEncryptionKey] = useState<CryptoKey | null>(null);
   const [userIdentifier, setUserIdentifier] = useState<string | null>(() => localStorage.getItem('userIdentifier'));
   const [error, setError] = useState<string | null>(null);
@@ -150,7 +151,8 @@ export const AuthProvider = ({ children, fallback }: AuthProviderProps) => {
   // Render children with context
   return (
     <AuthContext.Provider value={contextValue}>
-      {!encryptionKey ? fallback(login)
+      {!encryptionKey ? fallback(login) 
+        : forceShowFallback ? fallback(login)
         : typeof children === 'function' ? children(contextValue) 
         : children}
     </AuthContext.Provider>
