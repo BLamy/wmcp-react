@@ -1,0 +1,137 @@
+/* CodeMirror editor styles */
+
+/* Base editor styles */
+.cm-editor {
+  height: 100%;
+  color: #d4d4d4;
+  background-color: #1e1e1e;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Scrollbar styling */
+.cm-scroller {
+  overflow: auto;
+  height: 100%;
+}
+
+/* Line number gutter */
+.cm-gutters {
+  background-color: #1e1e1e;
+  border-right: 1px solid #333;
+  padding-right: 8px;
+}
+
+.cm-lineNumbers .cm-gutterElement {
+  color: #858585;
+  padding: 0 6px 0 8px;
+}
+
+/* Active line highlight */
+.cm-activeLine {
+  background-color: #282828;
+}
+
+/* Selection highlight */
+.cm-selectionMatch {
+  background-color: rgba(77, 151, 255, 0.3);
+}
+
+/* Search match styling */
+.cm-searchMatch {
+  background-color: rgba(234, 92, 0, 0.33);
+  border: 1px solid rgba(234, 92, 0, 0.5);
+}
+
+.cm-searchMatch-selected {
+  background-color: #6199ff2f;
+}
+
+/* Error and warning markers */
+.cm-diagnosticError {
+  background-color: #f14c4c2f;
+  border-bottom: 2px solid #f14c4c;
+}
+
+.cm-diagnosticWarning {
+  background-color: #e0af682f;
+  border-bottom: 2px solid #e0af68;
+}
+
+/* Syntax highlighting - VS Code dark theme inspired */
+.cm-comment {
+  color: #6a9955;
+}
+
+.cm-string {
+  color: #ce9178;
+}
+
+.cm-number {
+  color: #b5cea8;
+}
+
+.cm-keyword {
+  color: #569cd6;
+}
+
+.cm-operator {
+  color: #d4d4d4;
+}
+
+.cm-property {
+  color: #9cdcfe;
+}
+
+.cm-variable {
+  color: #9cdcfe;
+}
+
+.cm-definition {
+  color: #4fc1ff;
+}
+
+.cm-variableName {
+  color: #9cdcfe;
+}
+
+.cm-function {
+  color: #dcdcaa;
+}
+
+.cm-atom {
+  color: #569cd6;
+}
+
+.cm-meta {
+  color: #d4d4d4;
+}
+
+.cm-tag {
+  color: #569cd6;
+}
+
+.cm-attribute {
+  color: #9cdcfe;
+}
+
+.cm-heading {
+  color: #569cd6;
+  font-weight: bold;
+}
+
+.cm-link {
+  color: #569cd6;
+  text-decoration: underline;
+}
+
+/* Cursor styling */
+.cm-cursor {
+  border-left: 2px solid #aeafad;
+}
+
+/* Debugging highlight */
+.cm-debugger-highlight {
+  background-color: rgba(86, 156, 214, 0.3);
+} 

@@ -1,5 +1,28 @@
-import React, { useRef, useEffect } from 'react';
-import Editor, { OnMount, Monaco } from '@monaco-editor/react';
+import React, { useRef, useEffect, useState } from 'react';
+import {
+  EditorState,
+  StateEffect,
+  StateField,
+  Extension
+} from "@codemirror/state";
+import {
+  EditorView,
+  Decoration,
+  DecorationSet
+} from "@codemirror/view";
+import { basicSetup } from "codemirror";
+import { javascript } from "@codemirror/lang-javascript";
+import { oneDark } from "@codemirror/theme-one-dark";
+import { html } from "@codemirror/lang-html";
+import { css } from "@codemirror/lang-css";
+import { json } from "@codemirror/lang-json";
+import { markdown } from "@codemirror/lang-markdown";
+import { python } from "@codemirror/lang-python";
+import { rust } from "@codemirror/lang-rust";
+import { cpp } from "@codemirror/lang-cpp";
+
+// Import custom CSS for CodeMirror
+import '@/components/WebcontainerCodeEditor/codemirror.css';
 
 /**
  * Props for the FileEditor component
@@ -18,7 +41,7 @@ export interface FileEditorProps {
   /** Height of the editor */
   height?: string | number;
   /** Callback when the editor is mounted */
-  onMount?: OnMount;
+  onMount?: (view: EditorView) => void;
   /** Theme to use for the editor */
   theme?: string;
   /** Optional additional CSS class names */
@@ -27,8 +50,75 @@ export interface FileEditorProps {
   refreshKey?: number;
 }
 
+// CodeMirror highlight setup
+const clearHighlight = StateEffect.define();
+const addHighlight = StateEffect.define<DecorationSet>();
+const highlightField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(deco, tr) {
+    deco = deco.map(tr.changes);
+    for (const e of tr.effects) {
+      if (e.is(clearHighlight)) return Decoration.none;
+      if (e.is(addHighlight)) return e.value;
+    }
+    return deco;
+  },
+  provide: f => EditorView.decorations.from(f),
+});
+
+// Create a VS Code dark theme extension for CodeMirror
+const vscodeDarkTheme = EditorView.theme({
+  '&': {
+    backgroundColor: '#1e1e1e',
+    color: '#d4d4d4'
+  },
+  '.cm-content': {
+    caretColor: '#aeafad'
+  },
+  '&.cm-focused .cm-cursor': {
+    borderLeftColor: '#aeafad'
+  },
+  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
+    backgroundColor: '#264f78'
+  },
+  '.cm-panels': {
+    backgroundColor: '#1e1e1e',
+    color: '#d4d4d4'
+  },
+  '.cm-panels.cm-panels-top': {
+    borderBottom: '1px solid #333'
+  },
+  '.cm-panels.cm-panels-bottom': {
+    borderTop: '1px solid #333'
+  },
+  '.cm-searchMatch': {
+    backgroundColor: 'rgba(234, 92, 0, 0.33)',
+    border: '1px solid rgba(234, 92, 0, 0.5)'
+  },
+  '.cm-searchMatch.cm-searchMatch-selected': {
+    backgroundColor: 'rgba(97, 153, 255, 0.33)'
+  },
+  '.cm-activeLine': {
+    backgroundColor: 'rgba(40, 40, 40, 0.7)'
+  },
+  '.cm-line': {
+    lineHeight: '1.5'
+  },
+  '.cm-gutters': {
+    backgroundColor: '#1e1e1e',
+    color: '#858585',
+    border: 'none'
+  },
+  '.cm-gutterElement': {
+    padding: '0 6px 0 8px'
+  },
+  '.cm-activeLineGutter': {
+    backgroundColor: 'rgba(40, 40, 40, 0.7)'
+  }
+});
+
 /**
- * A reusable component that wraps Monaco editor for code editing
+ * A reusable component that wraps CodeMirror editor for code editing
  */
 export function FileEditor({
   content,
@@ -42,88 +132,137 @@ export function FileEditor({
   className = '',
   refreshKey = 0
 }: FileEditorProps) {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const viewRef = useRef<EditorView | null>(null);
+  const [previousContent, setPreviousContent] = useState(content);
+
   // Determine language from file extension if not explicitly provided
   const detectedLanguage = language || getLanguageFromPath(path || '');
-  const editorRef = useRef<any>(null);
 
-  // Handle content changes
-  const handleEditorChange = (value: string | undefined) => {
-    if (onChange && value !== undefined) {
-      onChange(value);
+  // Handle content changes from outside
+  useEffect(() => {
+    if (viewRef.current && content !== previousContent) {
+      const currentView = viewRef.current;
+      const currentText = currentView.state.doc.toString();
+      
+      if (content !== currentText) {
+        currentView.dispatch({
+          changes: {
+            from: 0,
+            to: currentText.length,
+            insert: content
+          }
+        });
+        setPreviousContent(content);
+      }
     }
-  };
+  }, [content, previousContent]);
 
-  // Store editor reference on mount
-  const handleEditorMount = (editor: any, monaco: Monaco) => {
-    editorRef.current = editor;
+  // Create and configure the editor
+  useEffect(() => {
+    if (!hostRef.current) return;
     
-    // Setup TypeScript/JavaScript language features
-    setupTypeScriptSupport(monaco);
+    // Get language extension based on detected language
+    const langExtension = getLanguageExtension(detectedLanguage);
     
-    // Call the original onMount if provided
+    // Theme selection based on provided theme
+    const themeExtension = theme.includes('dark') ? [oneDark, vscodeDarkTheme] : [];
+    
+    // Setup the editor
+    const updateListener = EditorView.updateListener.of((update) => {
+      if (update.docChanged && onChange) {
+        const value = update.state.doc.toString();
+        onChange(value);
+        setPreviousContent(value);
+      }
+    });
+
+    const extensions: Extension[] = [
+      basicSetup,
+      langExtension,
+      ...themeExtension,
+      highlightField,
+      EditorView.editable.of(!readOnly),
+      updateListener,
+      EditorView.theme({
+        "&": { height: typeof height === 'string' ? height : `${height}px` },
+        ".cm-scroller": { overflow: "auto" }
+      }),
+    ];
+
+    const view = new EditorView({
+      parent: hostRef.current,
+      state: EditorState.create({
+        doc: content,
+        extensions,
+      }),
+    });
+
+    viewRef.current = view;
+    
     if (onMount) {
-      onMount(editor, monaco);
+      onMount(view);
     }
-  };
+
+    return () => {
+      view.destroy();
+      viewRef.current = null;
+    };
+  }, [detectedLanguage, theme, refreshKey, content, onChange, readOnly, height, onMount]); // Re-initialize when these props change
 
   // Force editor layout update when refreshKey changes
   useEffect(() => {
-    if (editorRef.current) {
-      // Small delay to ensure the layout update happens after any DOM changes
-      setTimeout(() => {
-        editorRef.current.layout();
-      }, 50);
+    if (viewRef.current) {
+      // Make sure the editor is visible and sized correctly
+      requestAnimationFrame(() => {
+        const view = viewRef.current;
+        if (view) {
+          view.requestMeasure();
+        }
+      });
     }
   }, [refreshKey]);
 
   return (
-    <div className={`overflow-hidden h-full ${className}`} key={refreshKey}>
-      <Editor
-        height={height}
-        language={detectedLanguage}
-        value={content}
-        onChange={handleEditorChange}
-        theme={theme}
-        options={{
-          readOnly,
-          minimap: { enabled: true },
-          scrollBeyondLastLine: false,
-          fontSize: 14,
-          wordWrap: 'on',
-          automaticLayout: true
-        }}
-        onMount={handleEditorMount}
-      />
-    </div>
+    <div 
+      ref={hostRef} 
+      className={`h-full w-full overflow-hidden ${className}`} 
+      style={{ height: typeof height === 'string' ? height : `${height}px` }}
+    />
   );
 }
 
 /**
- * Configure Monaco for TypeScript/JavaScript support
+ * Get CodeMirror language extension based on language name
  */
-function setupTypeScriptSupport(monaco: Monaco) {
-  // Set compiler options for TypeScript
-  monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-    target: monaco.languages.typescript.ScriptTarget.ES2020,
-    allowNonTsExtensions: true,
-    moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
-    module: monaco.languages.typescript.ModuleKind.CommonJS,
-    noEmit: true,
-    esModuleInterop: true,
-    jsx: monaco.languages.typescript.JsxEmit.React,
-    reactNamespace: 'React',
-    allowJs: true,
-    typeRoots: ["node_modules/@types"]
-  });
-
-  // Same for JavaScript
-  monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
-    allowNonTsExtensions: true,
-    allowJs: true,
-    checkJs: true,
-    jsx: monaco.languages.typescript.JsxEmit.React,
-    target: monaco.languages.typescript.ScriptTarget.ES2020
-  });
+function getLanguageExtension(language: string): Extension {
+  switch (language.toLowerCase()) {
+    case 'javascript':
+      return javascript();
+    case 'typescript':
+      return javascript({ typescript: true });
+    case 'jsx':
+      return javascript({ jsx: true });
+    case 'tsx':
+      return javascript({ jsx: true, typescript: true });
+    case 'html':
+      return html();
+    case 'css':
+      return css();
+    case 'json':
+      return json();
+    case 'markdown':
+      return markdown();
+    case 'python':
+      return python();
+    case 'rust':
+      return rust();
+    case 'c':
+    case 'cpp':
+      return cpp();
+    default:
+      return javascript(); // Fallback to JavaScript
+  }
 }
 
 /**
@@ -133,9 +272,9 @@ function getLanguageFromPath(path: string): string {
   const extension = path.split('.').pop()?.toLowerCase() || '';
   const languageMap: Record<string, string> = {
     'js': 'javascript',
-    'jsx': 'javascript',
+    'jsx': 'jsx',
     'ts': 'typescript',
-    'tsx': 'typescript',
+    'tsx': 'tsx',
     'html': 'html',
     'htm': 'html',
     'css': 'css',
