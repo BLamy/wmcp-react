@@ -407,7 +407,7 @@ export interface WebContainerAgentHandle {
   handleClearMessages: () => void;
 }
 
-export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContainerAgentProps>(({ 
+export const WebContainerAgent = React.memo(forwardRef<WebContainerAgentHandle, WebContainerAgentProps>(({ 
   messages, 
   setMessages, 
   apiKey, 
@@ -695,6 +695,10 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
 
   // Function to transform MPC tools to match Anthropic's API format
   const transformMpcTools = (tools: any[]) => {
+    // Store MCP tool names in a separate array for identification
+    const mcpToolNames = tools.map(tool => tool.name);
+    console.log("MCP tool names:", mcpToolNames);
+    
     return tools.map(tool => {
       // Create a copy with a more flexible type to allow property manipulation
       const transformedTool: Record<string, any> = { ...tool };
@@ -718,6 +722,61 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
     });
   };
 
+  // Store MCP tool names for later lookup
+  const [mcpToolNames, setMcpToolNames] = useState<string[]>([]);
+
+  // Add a helper function to execute MCP tools correctly
+  const executeMcpTool = async (toolName: string, args: any): Promise<ToolResult> => {
+    if (!executeTool) {
+      console.error("executeTool function not available");
+      return {
+        status: "error" as const,
+        error: "Tool execution function not available"
+      };
+    }
+    
+    try {
+      console.log(`Executing MCP tool: ${toolName} with args:`, args);
+      
+      // Check if this is actually an MCP tool
+      if (!mcpToolNames.includes(toolName)) {
+        console.error(`${toolName} is not a recognized MCP tool`);
+        return {
+          status: "error" as const,
+          error: `${toolName} is not a recognized MCP tool. Available MCP tools: ${mcpToolNames.join(', ')}`
+        };
+      }
+      
+      // Get the server that this tool belongs to from the toolToServerMap
+      const serverName = toolToServerMap ? toolToServerMap.get(toolName) : undefined;
+      if (!serverName) {
+        console.error(`No server found for tool: ${toolName}`);
+        return { 
+          status: "error" as const, 
+          error: `No server found for tool: ${toolName}. Available servers: ${Object.keys(activeServers).join(', ')}` 
+        };
+      }
+      
+      console.log(`Tool ${toolName} is mapped to server: ${serverName}`);
+      
+      // Execute the tool with the correct server context
+      const result = await executeTool(toolName, args);
+      console.log(`Tool ${toolName} execution result:`, result);
+      
+      return {
+        status: "success" as const,
+        message: `Successfully executed ${toolName}`,
+        content: result
+      };
+    } catch (error) {
+      console.error(`Error executing MCP tool ${toolName}:`, error);
+      return {
+        status: "error" as const,
+        error: `Error executing tool ${toolName}: ${error instanceof Error ? error.message : String(error)}`
+      };
+    }
+  };
+
   // Get the agent hook with our custom callLLM function
   const {
     messages: agentMessages,
@@ -732,26 +791,22 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
     tools: mcpTools && mcpTools.length > 0 
       ? [...DEFAULT_TOOLS, ...transformMpcTools(mcpTools)] 
       : DEFAULT_TOOLS,
+    executeMcpTool,
+    mcpToolNames
   });
-
-  // Update tools when mcpTools changes
-  useEffect(() => {
-    if (updateTools && mcpTools) {
-      // Transform MPC tools to match Anthropic's API format
-      const transformedMpcTools = transformMpcTools(mcpTools);
-      
-      const combinedTools = transformedMpcTools.length > 0 ? [...DEFAULT_TOOLS, ...transformedMpcTools] : DEFAULT_TOOLS;
-      updateTools(combinedTools);
-      console.log("Updated tools with MCP tools:", transformedMpcTools.length);
-    }
-  }, [mcpTools, updateTools]);
 
   // Sync agent messages with the Chat component's messages
   useEffect(() => {
     if (agentMessages.length > 0) {
-      setMessages(agentMessages);
+      // Check if messages have actually changed
+      const agentMessagesIds = agentMessages.map(m => m.id).join(',');
+      const currentMessagesIds = messages.map(m => m.id).join(',');
+      
+      if (agentMessagesIds !== currentMessagesIds) {
+        setMessages(agentMessages);
+      }
     }
-  }, [agentMessages, setMessages]);
+  }, [agentMessages, setMessages, messages]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -907,8 +962,20 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
     handleClearMessages
   }));
 
+  // Add groupedMessagesRef before getGroupedMessages
+  const groupedMessagesRef = useRef<{
+    key: string;
+    result: Array<Message | { type: 'tool_pair', call: ToolCallMessage, result: ToolResultMessage }>;
+  } | null>(null);
+
   // Group messages to pair tool calls with their results
   const getGroupedMessages = useCallback(() => {
+    const messagesKey = messages.map(m => m.id).join(',');
+    // Use ref to cache the last result
+    if (groupedMessagesRef.current && groupedMessagesRef.current.key === messagesKey) {
+      return groupedMessagesRef.current.result;
+    }
+    
     const groupedMessages: Array<Message | { type: 'tool_pair', call: ToolCallMessage, result: ToolResultMessage }> = [];
     const toolResultsById: Record<string, ToolResultMessage> = {};
     
@@ -951,6 +1018,12 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
         groupedMessages.push(message);
       }
     }
+    
+    // Cache the result
+    groupedMessagesRef.current = {
+      key: messagesKey,
+      result: groupedMessages
+    };
     
     return groupedMessages;
   }, [messages]);
@@ -1409,6 +1482,37 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
     return null;
   };
 
+  // Update tools when mcpTools changes
+  useEffect(() => {
+    if (updateTools && mcpTools) {
+      // Compare to see if tools have actually changed to avoid unnecessary updates
+      const toolNames = mcpTools.map(t => t.name);
+      const toolNamesString = toolNames.join(',');
+      
+      // Only update if the tool names have changed
+      if (toolNamesString !== mcpToolNames.join(',')) {
+        setMcpToolNames(toolNames);
+        
+        // Log the tools to help debug
+        console.log("Available MCP tools:", toolNames);
+        
+        // Transform MPC tools to match Anthropic's API format
+        const transformedMpcTools = transformMpcTools(mcpTools);
+        
+        const combinedTools = transformedMpcTools.length > 0 ? [...DEFAULT_TOOLS, ...transformedMpcTools] : DEFAULT_TOOLS;
+        updateTools(combinedTools);
+        console.log("Updated tools with MCP tools:", transformedMpcTools.length);
+      }
+    }
+  }, [mcpTools, updateTools, mcpToolNames]);
+
+  // Memoize the message content renderer for better performance
+  const MemoizedMessageContent = React.memo(
+    ({ message }: { message: Message | { type: 'tool_pair', call: ToolCallMessage, result: ToolResultMessage } }) => {
+      return renderMessageContent(message);
+    }
+  );
+
   return (
     <div className="h-full flex flex-col w-full bg-[#1e1e1e]">
       {/* Server config sheet - only show it if we're managing servers locally */}
@@ -1482,7 +1586,7 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
                     : "bg-[#252526] text-gray-100"
                 }`}
               >
-                {renderMessageContent(message)}
+                <MemoizedMessageContent message={message} />
 
                 <div className="text-xs mt-1 opacity-70 text-right">
                   {formatTime(message.type === 'tool_pair' ? message.call.timestamp : 'timestamp' in message ? message.timestamp : new Date())}
@@ -1695,5 +1799,15 @@ export const WebContainerAgent = forwardRef<WebContainerAgentHandle, WebContaine
         </form>
       </div>
     </div>
+  );
+}), (prevProps, nextProps) => {
+  // Custom comparison function
+  // Only re-render if these specific props have changed
+  return (
+    prevProps.apiKey === nextProps.apiKey &&
+    JSON.stringify(prevProps.testResults) === JSON.stringify(nextProps.testResults) &&
+    // Deep compare messages only if the length has changed
+    (prevProps.messages.length === nextProps.messages.length || 
+      JSON.stringify(prevProps.messages.map(m => m.id)) === JSON.stringify(nextProps.messages.map(m => m.id)))
   );
 });

@@ -1,0 +1,99 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`debuggerInstrumentation ‑ inline describe/it block > steps through add() & subtract() 1`] = `
+{
+  "/Users/brettlamy/Dev/wmcp-react/math.spec.js": {
+    "Math": {
+      "add": {
+        "adds numbers": [
+          {
+            "line": 13,
+            "sourceCode": "it('adds numbers', () => {",
+            "vars": {},
+          },
+          {
+            "line": 14,
+            "sourceCode": "const x = add(1, 1);",
+            "vars": {},
+          },
+          {
+            "line": 2,
+            "sourceCode": "const total = a + b;",
+            "vars": {
+              "a": 1,
+              "b": 1,
+            }
+          },
+          {
+            "line": 3,
+            "sourceCode": "return total",
+            "vars": {
+              "a": 1,
+              "b": 1,
+              "total": 2,
+            }
+          },
+          {
+            "line": 15,
+            "sourceCode": "if (x !== 2) {",
+            "vars": {
+              "x": 2,
+            },
+          },
+          {
+            "line": 18,
+            "sourceCode": "});",
+            "vars": {
+              "x": 2,
+            },
+          }
+        ]
+      },
+      "subtract": {
+        "subtracts numbers": [
+          {
+            "line": 21,
+            "sourceCode": "it('subtracts numbers', () => {",
+            "vars": {},
+          },
+          {
+            "line": 22,
+            "sourceCode": "const y = subtract(5, 3);",
+            "vars": {},
+          },
+          {
+            "line": 6,
+            "sourceCode": "const difference = a - b;",
+            "vars": {
+              "a": 5,
+              "b": 3,
+            }
+          },
+          {
+            "line": 7,
+            "sourceCode": "return difference",
+            "vars": {
+              "a": 5,
+              "b": 3,
+              "difference": 2,
+            }
+          },
+          {
+            "line": 23,
+            "sourceCode": "if (y !== 2) {",
+            "vars": {
+              "y": 2,
+            },
+          },
+          {
+            "line": 26,
+            "sourceCode": "});",
+            "vars": {
+              "y": 2,
+            },
+          }
+        ]
+      }
+    }
+  }
+}`;

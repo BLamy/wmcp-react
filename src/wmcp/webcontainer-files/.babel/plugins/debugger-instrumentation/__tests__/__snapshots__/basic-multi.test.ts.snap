@@ -1,0 +1,192 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`debuggerInstrumentation ‑ TypeScript > single TS snippet retains original lines 1`] = `
+[
+  {
+    "file": "/Users/brettlamy/Dev/wmcp-react/snippet.js",
+    "line": 2,
+    "sourceLine": "const { describe, test } ='vitest';",
+    "stepNumber": 1,
+    "suite": "My_Suite_Weird_Name_v1",
+    "test": "UnknownTest",
+    "vars": {},
+  },
+  {
+    "file": "/Users/brettlamy/Dev/wmcp-react/snippet.ts",
+    "line": 2,
+    "sourceLine": "interface Foo{bar:string}",
+    "stepNumber": 1,
+    "suite": "RootSuite",
+    "test": "UnknownTest",
+    "vars": {},
+  },
+  {
+    "file": "/Users/brettlamy/Dev/wmcp-react/snippet.ts",
+    "line": 1,
+    "sourceLine": "const { a, b: renamed } = { a: 7, b: 9 };",
+    "stepNumber": 1,
+    "suite": "single",
+    "test": "UnknownTest",
+    "vars": {
+      "a": 7,
+      "renamed": 9,
+    },
+  },
+  {
+    "file": "/Users/brettlamy/Dev/wmcp-react/snippet.ts",
+    "line": 3,
+    "sourceLine": "function baz(f:Foo){",
+    "stepNumber": 2,
+    "suite": "RootSuite",
+    "test": "UnknownTest",
+    "vars": {
+      "f": {
+        "bar": "hi",
+      },
+    },
+  },
+  {
+    "file": "/Users/brettlamy/Dev/wmcp-react/snippet.ts",
+    "line": 2,
+    "sourceLine": "for(let j=0;j<3;j++){ const squared=j*j }",
+    "stepNumber": 2,
+    "suite": "single",
+    "test": "UnknownTest",
+    "vars": {
+      "j": 1,
+      "squared": 1,
+    },
+  },
+  {
+    "file": "/Users/brettlamy/Dev/wmcp-react/snippet.ts",
+    "line": 4,
+    "sourceLine": "const x = f.bar;",
+    "stepNumber": 3,
+    "suite": "RootSuite",
+    "test": "UnknownTest",
+    "vars": {
+      "f": {
+        "bar": "hi",
+      },
+      "x": "hi",
+    },
+  },
+  {
+    "file": "/Users/brettlamy/Dev/wmcp-react/snippet.ts",
+    "line": 2,
+    "sourceLine": "for(let j=0;j<3;j++){ const squared=j*j }",
+    "stepNumber": 3,
+    "suite": "single",
+    "test": "UnknownTest",
+    "vars": {
+      "j": 2,
+      "squared": 4,
+    },
+  },
+  {
+    "file": "/Users/brettlamy/Dev/wmcp-react/snippet.ts",
+    "line": 7,
+    "sourceLine": "baz({bar:'hi'});",
+    "stepNumber": 4,
+    "suite": "RootSuite",
+    "test": "UnknownTest",
+    "vars": {},
+  },
+  {
+    "file": "/Users/brettlamy/Dev/wmcp-react/snippet.ts",
+    "line": 2,
+    "sourceLine": "let sum=0; for(let i=0;i<5;i++) sum+=i;",
+    "stepNumber": 4,
+    "suite": "single",
+    "test": "UnknownTest",
+    "vars": {
+      "i": 1,
+      "sum": 1,
+    },
+  },
+  {
+    "file": "/Users/brettlamy/Dev/wmcp-react/snippet.ts",
+    "line": 2,
+    "sourceLine": "let sum=0; for(let i=0;i<5;i++) sum+=i;",
+    "stepNumber": 5,
+    "suite": "single",
+    "test": "UnknownTest",
+    "vars": {
+      "i": 1,
+      "sum": 1,
+    },
+  },
+  {
+    "file": "/Users/brettlamy/Dev/wmcp-react/snippet.ts",
+    "line": 2,
+    "sourceLine": "let sum=0; for(let i=0;i<5;i++) sum+=i;",
+    "stepNumber": 6,
+    "suite": "single",
+    "test": "UnknownTest",
+    "vars": {
+      "i": 2,
+      "sum": 3,
+    },
+  },
+  {
+    "file": "/Users/brettlamy/Dev/wmcp-react/snippet.ts",
+    "line": 2,
+    "sourceLine": "let sum=0; for(let i=0;i<5;i++) sum+=i;",
+    "stepNumber": 7,
+    "suite": "single",
+    "test": "UnknownTest",
+    "vars": {
+      "i": 2,
+      "sum": 3,
+    },
+  },
+  {
+    "file": "/Users/brettlamy/Dev/wmcp-react/snippet.ts",
+    "line": 2,
+    "sourceLine": "let sum=0; for(let i=0;i<5;i++) sum+=i;",
+    "stepNumber": 8,
+    "suite": "single",
+    "test": "UnknownTest",
+    "vars": {
+      "i": 3,
+      "sum": 6,
+    },
+  },
+  {
+    "file": "/Users/brettlamy/Dev/wmcp-react/snippet.ts",
+    "line": 2,
+    "sourceLine": "let sum=0; for(let i=0;i<5;i++) sum+=i;",
+    "stepNumber": 9,
+    "suite": "single",
+    "test": "UnknownTest",
+    "vars": {
+      "i": 3,
+      "sum": 6,
+    },
+  },
+  {
+    "file": "/Users/brettlamy/Dev/wmcp-react/snippet.ts",
+    "line": 2,
+    "sourceLine": "let sum=0; for(let i=0;i<5;i++) sum+=i;",
+    "stepNumber": 10,
+    "suite": "single",
+    "test": "UnknownTest",
+    "vars": {
+      "i": 4,
+      "sum": 10,
+    },
+  },
+  {
+    "file": "/Users/brettlamy/Dev/wmcp-react/snippet.ts",
+    "line": 2,
+    "sourceLine": "let sum=0; for(let i=0;i<5;i++) sum+=i;",
+    "stepNumber": 11,
+    "suite": "single",
+    "test": "UnknownTest",
+    "vars": {
+      "i": 4,
+      "sum": 10,
+    },
+  },
+]
+`;

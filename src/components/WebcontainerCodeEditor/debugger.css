@@ -1,0 +1,133 @@
+/* Debugger styles for CodeMirror and other elements */
+
+/* CodeMirror highlight */
+.cm-debugger-highlight {
+  background-color: rgba(0, 122, 204, 0.4) !important;
+  border-radius: 2px;
+}
+
+/* Variable styles */
+.var-name {
+  color: #9cdcfe;
+}
+
+/* Variable types */
+.undefined {
+  color: #808080;
+  font-style: italic;
+}
+.null {
+  color: #808080;
+  font-style: italic;
+}
+.boolean {
+  color: #569cd6;
+}
+.number {
+  color: #b5cea8;
+}
+.string {
+  color: #ce9178;
+}
+.object {
+  color: #4ec9b0;
+}
+
+/* Timeline styles */
+.timeline-track {
+  display: flex;
+  width: 100%;
+  height: 4px;
+  background-color: #3c3c3c;
+  margin: 4px 0;
+}
+
+.timeline-point {
+  flex: 1;
+  height: 100%;
+  margin: 0 1px;
+  background-color: #555;
+  cursor: pointer;
+}
+
+.timeline-point.active {
+  background-color: #0078d7;
+}
+
+/* Variable panel styles */
+.variable {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 8px;
+  border-bottom: 1px solid #333;
+}
+
+.variable.changed {
+  background-color: rgba(86, 156, 214, 0.1);
+}
+
+/* Debug step navigation buttons */
+.debug-nav-button {
+  color: #cccccc;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: background-color 0.2s;
+}
+
+.debug-nav-button:hover {
+  background-color: #3c3c3c;
+  color: white;
+}
+
+/* Debug panel container */
+.debug-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background-color: #1e1e1e;
+  color: #e0e0e0;
+  font-size: 13px;
+}
+
+/* Debug controls */
+.debugger-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background-color: #2d2d2d;
+  border-bottom: 1px solid #333;
+}
+
+/* Test list */
+.test-list-container {
+  height: 100%;
+  overflow-y: auto;
+  font-size: 13px;
+}
+
+.debug-test-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.debug-test-item:hover {
+  background-color: #2a2d2e;
+}
+
+.debug-test-item.active {
+  background-color: #37373d;
+}
+
+/* No data message */
+.no-data-message {
+  padding: 16px;
+  text-align: center;
+  color: #888;
+} 

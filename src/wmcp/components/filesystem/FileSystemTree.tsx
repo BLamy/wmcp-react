@@ -45,7 +45,7 @@ export interface FileSystemTreeProps {
 /**
  * A reusable component for displaying file system trees with a sidebar UI
  */
-export function FileSystemTree({
+export const FileSystemTree = React.memo(function FileSystemTree({
   files,
   onSelectionChange,
   selectedPaths = [],
@@ -58,20 +58,20 @@ export function FileSystemTree({
   onRefresh,
   showAutoRefreshIndicator = false
 }: FileSystemTreeProps) {
-  // Convert expandedPaths array to a record for easier lookup
   const [expandedFoldersState, setExpandedFoldersState] = useState<Record<string, boolean>>(
     expandedPaths.reduce((acc, path) => ({ ...acc, [path]: true }), {})
   );
   
-  // State to track if auto-refresh is active
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
-  // Use ref to track if we're mounted to prevent memory leaks
   const isMounted = useRef(true);
-  // Reference to the interval ID
   const intervalIdRef = useRef<number | null>(null);
 
-  // Handle component mount/unmount
+  // Ref to hold the latest isRefreshing value for use in doRefresh without adding to useEffect deps
+  const isRefreshingRef = useRef(isRefreshing);
+  useEffect(() => {
+    isRefreshingRef.current = isRefreshing;
+  }, [isRefreshing]);
+
   useEffect(() => {
     isMounted.current = true;
     return () => {
@@ -83,26 +83,21 @@ export function FileSystemTree({
     };
   }, []);
   
-  // Set up auto-refresh
   useEffect(() => {
-    // Clear any existing interval first
     if (intervalIdRef.current) {
       window.clearInterval(intervalIdRef.current);
       intervalIdRef.current = null;
     }
     
-    if (!refreshInterval || !onRefresh || refreshInterval < 1000) {
+    if (!onRefresh || !refreshInterval || refreshInterval < 1000) {
       return;
     }
     
-    
     const doRefresh = async () => {
-      if (isRefreshing || !isMounted.current) {
+      if (isRefreshingRef.current || !isMounted.current) {
         return;
       }
       
-      
-      // Only show loading UI if explicitly requested
       if (showAutoRefreshIndicator) {
         setIsRefreshing(true);
       }
@@ -118,15 +113,9 @@ export function FileSystemTree({
       }
     };
     
-    // Start with immediate refresh
     doRefresh();
     
-    // Create the interval with the window object explicitly
-    const id = window.setInterval(() => {
-      doRefresh();
-    }, refreshInterval);
-    
-    // Store the interval ID
+    const id = window.setInterval(doRefresh, refreshInterval);
     intervalIdRef.current = id;
     
     return () => {
@@ -135,10 +124,10 @@ export function FileSystemTree({
         intervalIdRef.current = null;
       }
     };
-  }, [refreshInterval, onRefresh, isRefreshing, showAutoRefreshIndicator]);
+  }, [refreshInterval, onRefresh, showAutoRefreshIndicator]);
 
   // Handle folder toggle
-  const toggleFolder = (path: string) => {
+  const toggleFolder = React.useCallback((path: string) => {
     const newExpandedFolders = {
       ...expandedFoldersState,
       [path]: !expandedFoldersState[path]
@@ -151,10 +140,10 @@ export function FileSystemTree({
         .filter(([_, isExpanded]) => isExpanded)
         .map(([path]) => path));
     }
-  };
+  }, [expandedFoldersState, onExpandedChange]);
 
   // Handle file selection
-  const handleSelectFile = (path: string) => {
+  const handleSelectFile = React.useCallback((path: string) => {
     if (onSelectionChange) {
       if (selectionMode === 'single') {
         onSelectionChange([path]);
@@ -167,20 +156,20 @@ export function FileSystemTree({
         }
       }
     }
-  };
+  }, [onSelectionChange, selectionMode, selectedPaths]);
 
   // Default icon renderer
-  const defaultRenderIcon = (entry: FSEntry) => {
+  const defaultRenderIcon = React.useCallback((entry: FSEntry) => {
     if (entry.isDirectory) {
       return expandedFoldersState[entry.path] ? 
         <FolderOpenIcon className="h-4 w-4 mr-2 shrink-0 text-amber-500" /> : 
         <FolderIcon className="h-4 w-4 mr-2 shrink-0 text-amber-500" />;
     }
     return <FileIcon className="h-4 w-4 mr-2 shrink-0 text-blue-500" />;
-  };
+  }, [expandedFoldersState]);
 
   // Render tree items recursively
-  const renderFileTree = (entries: FSEntry[]) => {
+  const renderFileTree = React.useCallback((entries: FSEntry[]) => {
     return entries.map(entry => {
       const path = entry.path;
       const isExpanded = expandedFoldersState[path];
@@ -223,7 +212,7 @@ export function FileSystemTree({
         );
       }
     });
-  };
+  }, [expandedFoldersState, selectedPaths, toggleFolder, handleSelectFile, renderIcon, defaultRenderIcon]);
 
   return (
     <div className="file-system-tree">
@@ -239,4 +228,4 @@ export function FileSystemTree({
       <SidebarMenu>{renderFileTree(files)}</SidebarMenu>
     </div>
   );
-} 
+});
