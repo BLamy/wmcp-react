@@ -358,7 +358,6 @@ export interface UseWebContainerAgentProps {
   tools?: any[];
   previewMode?: boolean;
   executeMcpTool?: (toolName: string, args: any) => Promise<ToolResult>;
-  mcpToolNames?: string[]; // Names of MCP tools
 }
 
 // Helper function for delay
@@ -373,8 +372,7 @@ export function useWebContainerAgent({
   systemPrompt = DEFAULT_SYSTEM_PROMPT,
   tools = DEFAULT_TOOLS,
   previewMode = false,
-  executeMcpTool,
-  mcpToolNames = []
+  executeMcpTool
 }: UseWebContainerAgentProps) {
   const { webContainer } = useContext(WebContainerContext);
   const [messages, setMessages] = useState<Message[]>([
@@ -832,8 +830,14 @@ export function useWebContainerAgent({
     try {
       console.log("Executing tool:", toolCall.name, toolCall.arguments);
 
-      // Check if this is an MCP tool by checking if it's in the mcpToolNames list
-      const isMcpTool = mcpToolNames.includes(toolCall.name);
+      // Create a map of tools by name for easy lookup
+      const toolsMap = Object.fromEntries(
+        currentTools.current.map(tool => [tool.name, tool])
+      );
+
+      // Check if this is an MCP tool by checking if it exists in the built-in tools list
+      const isBuiltinTool = DEFAULT_TOOLS.some(t => t.name === toolCall.name);
+      const isMcpTool = !isBuiltinTool && toolsMap[toolCall.name] != null;
       
       // If it's an MCP tool, use the parent component's executeMcpTool function
       if (isMcpTool) {
@@ -1245,13 +1249,14 @@ export function useWebContainerAgent({
                 });
               }
             } catch (error) {
-              console.error(`Error getting stats for ${filePath}:`, error);
+              console.error(`Error searching file ${filePath}:`, error);
             }
           }
 
           return {
             status: "success",
-            message: `Search results: ${JSON.stringify(results)}`,
+            message: `Found ${results.length} files with matches for "${query}": ${JSON.stringify(results)}`,
+            query,
             results,
           };
         }
@@ -1259,10 +1264,7 @@ export function useWebContainerAgent({
         case "file_search": {
           const { query } = toolCall.arguments;
 
-          // This is a simplified implementation
-          // In a real-world scenario, you would use a proper file search tool
-
-          // First, get all files recursively
+          // Get all files recursively
           const getAllFiles = async (dir: string = "/"): Promise<string[]> => {
             const dirEntries = await webContainer.fs.readdir(dir);
             let files: string[] = [];
@@ -1288,75 +1290,222 @@ export function useWebContainerAgent({
 
           const allFiles = await getAllFiles();
 
-          // Filter files based on the query
-          const filteredFiles = allFiles.filter((file) =>
-            file.includes(query)
-          );
+          // Simple fuzzy search implementation
+          const matchingFiles = allFiles.filter((filePath) => {
+            return filePath.toLowerCase().includes(query.toLowerCase());
+          });
 
           return {
             status: "success",
-            message: `Search results: ${JSON.stringify(filteredFiles)}`,
-            files: filteredFiles,
+            message: `Found ${matchingFiles.length} files matching "${query}": ${JSON.stringify(matchingFiles)}`,
+            query,
+            files: matchingFiles,
           };
         }
 
         case "getFailingTests": {
-          // This is a simplified implementation
-          // In a real-world scenario, you would use a proper test runner to get failing tests
+          try {
+            // First try to load Vitest coverage summary if it exists
+            const coveragePath = "/.blamy/coverage/vitest-coverage.json";
+            let failing: string[] = [];
+            try {
+              const covRaw = await webContainer.fs.readFile(coveragePath, "utf-8");
+              const covJson = JSON.parse(covRaw);
+              if (Array.isArray(covJson.testResults)) {
+                covJson.testResults.forEach((suite: any) => {
+                  if (suite && Array.isArray(suite.assertionResults)) {
+                    suite.assertionResults.forEach((assert: any) => {
+                      if (assert.status === "failed") {
+                        failing.push(assert.title);
+                      }
+                    });
+                  }
+                });
+              }
+            } catch (covErr) {
+              // Coverage file may not exist; log for debugging but don't treat as fatal
+              console.warn("getFailingTests: unable to read coverage file", coveragePath, covErr);
+            }
 
-          // For now, we'll just return a hardcoded list of failing tests
-          const failingTests = [
-            "test1",
-            "test2",
-            "test3",
-          ];
+            // If still nothing found, fall back to heuristic using cached debug steps
+            if (failing.length === 0) {
+              if (!testResults.current || Object.keys(testResults.current).length === 0) {
+                return {
+                  status: "error",
+                  error: "No test results available, and coverage summary file not found. Run tests to generate debug data or coverage file."
+                };
+              }
 
-          return {
-            status: "success",
-            message: `Failing tests: ${JSON.stringify(failingTests)}`,
-            results: failingTests,
-          };
+              console.log("getFailingTests: falling back to debug steps heuristic");
+              Object.entries(testResults.current as Record<string, any[]>).forEach(([testId, steps]) => {
+                if (!Array.isArray(steps)) return;
+                for (const step of steps) {
+                  if (step?.failed || step?.error) {
+                    failing.push(testId);
+                    break;
+                  }
+                }
+              });
+            }
+
+            return {
+              status: "success",
+              message: `Retrieved ${failing.length} failing test(s): ${JSON.stringify(failing)}`,
+              tests: failing
+            };
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return {
+              status: "error",
+              error: `Failed to retrieve failing tests: ${msg}`
+            };
+          }
         }
 
         case "getTestStory": {
           const { testName } = toolCall.arguments;
 
-          // This is a simplified implementation
-          // In a real-world scenario, you would use a proper test runner to get the story of a test
+          if (!testName) {
+            return {
+              status: "error",
+              error: "Missing required parameter: testName",
+            };
+          }
+          const storyDirectory = `./.timetravel/${testName.replace(/[\s\\/?:*|"<>.]/g, "_").replace(/_+/g, "_")}`;
+          const storyFiles = await webContainer.fs.readdir(storyDirectory);
 
-          // For now, we'll just return a hardcoded story for the given test
-          const testStory = `Test story for ${testName}: This is a story about the test execution.`;
+            // Read all story files and parse them
+            const steps = [];
+            for (const file of storyFiles) {
+              if (file.endsWith('.json')) {
+                try {
+                  const filePath = `${storyDirectory}/${file}`;
+                  const content = await webContainer.fs.readFile(filePath, 'utf-8');
+                  const storyStep = JSON.parse(content);
+                  steps.push(storyStep);
+                } catch (readErr) {
+                  console.error(`Failed to read or parse story file ${file}:`, readErr);
+                }
+              }
+            }
+            
+            // Sort steps by stepNumber
+            steps.sort((a, b) => {
+              const stepA = a.stepNumber !== undefined ? a.stepNumber : 0;
+              const stepB = b.stepNumber !== undefined ? b.stepNumber : 0;
+              return stepA - stepB;
+            });
+          
+          const fileNames = steps.map((step) => step.file.split("/").pop());
+          const fileContents = await Promise.all(fileNames.map(async (fileName) => {
+            const content = await webContainer.fs.readFile(fileName, 'utf-8');
+            return { fileName, content };
+          }));
 
+          
           return {
             status: "success",
-            message: testStory,
+            message: `Retrieved ${steps.length} runtime value(s) for test '${testName}':
+            ${fileContents.map((file) => {
+              return "```"+file.fileName+"\n"+file.content+"\n```\n"
+            }).join("\n")}
+            
+            Test Steps:
+            \`\`\`json
+            ${JSON.stringify(steps, null, 2)}
+            \`\`\`
+            `,
+            values: steps,
           };
         }
 
-        default: {
+        default:
           throw new Error(`Unknown tool: ${toolCall.name}`);
-        }
       }
     } catch (error) {
-      console.error("Error in executeToolCall:", error);
-      throw error;
+      console.error("Tool execution error:", error);
+      return {
+        status: "error",
+        error: error instanceof Error ? error.message : String(error),
+      };
     }
+  };
+
+  const clearMessages = () => {
+    setMessages([
+      {
+        id: "1",
+        type: "assistant_message",
+        content: "Hello! I'm your coding assistant. How can I help you today?",
+        timestamp: new Date(),
+      },
+    ]);
+
+    // Clear any pending message queue
+    messageQueue.current = [];
+  };
+
+  // Effect to save messages to localStorage for persistence
+  useEffect(() => {
+    if (messages.length > 0) {
+      try {
+        // Convert Date objects to strings before saving
+        const serializedMessages = messages.map((msg) => ({
+          ...msg,
+          timestamp: msg.timestamp.toISOString(),
+        }));
+        localStorage.setItem(
+          "webcontainerAgentMessages",
+          JSON.stringify(serializedMessages)
+        );
+      } catch (error) {
+        console.error("Error saving messages to localStorage:", error);
+      }
+    }
+  }, [messages]);
+
+  // Effect to restore messages from localStorage on initial load
+  useEffect(() => {
+    try {
+      const savedMessages = localStorage.getItem("webcontainerAgentMessages");
+      if (savedMessages) {
+        const parsedMessages = JSON.parse(savedMessages);
+        // Convert string timestamps back to Date objects
+        const messagesWithDates = parsedMessages.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp),
+        }));
+        setMessages(messagesWithDates);
+      } else {
+        // Initialize with welcome message if no saved messages
+        clearMessages();
+      }
+    } catch (error) {
+      console.error("Error loading messages from localStorage:", error);
+      clearMessages();
+    }
+  }, []);
+
+  // Method to update active file
+  const setCurrentFile = (filePath: string | null) => {
+    currentFileRef.current = filePath;
+  };
+
+  // Method to update test results
+  const updateTestResults = (results: any) => {
+    testResults.current = results;
   };
 
   return {
     messages,
     setMessages,
     sendMessage,
-    clearMessages: () => setMessages([]),
+    clearMessages,
     isLoading: isProcessing,
     messagesEndRef: null,
     testResults: testResults.current,
-    updateTestResults: (newTestResults: any) => {
-      testResults.current = newTestResults;
-    },
-    setCurrentFile: (file: string | null) => {
-      currentFileRef.current = file;
-    },
+    updateTestResults,
+    setCurrentFile,
     activeFile: currentFileRef.current,
     updateTools,
   };

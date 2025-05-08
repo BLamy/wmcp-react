@@ -14,6 +14,7 @@ const useWebcontainerDebugger = () => {
   const [debugSteps, setDebugSteps] = useState<Record<string, any>>({});
   const [status, setStatus] = useState({ text: "Booting Webcontainer...", color: "#3BB446" });
   const [stats, setStats] = useState({ total: 0, passing: 0, time: "--" });
+  const [testStatuses, setTestStatuses] = useState<Record<string, "passed" | "failed" | "unknown">>({});
 
   // Update status based on webContainer status
   useEffect(() => {
@@ -68,25 +69,66 @@ const useWebcontainerDebugger = () => {
       await proc.exit;
       const dt = Math.round(performance.now() - t0);
 
+      // Read the coverage report to get test statuses
+      try {
+        const coverageReportPath = '/.blamy/coverage/vitest-coverage.json';
+        const coverageContent = await webContainer.fs.readFile(coverageReportPath, 'utf-8');
+        const coverageData = JSON.parse(coverageContent);
+        
+        // Build a map of test statuses
+        const testStatusMap: Record<string, "passed" | "failed" | "unknown"> = {};
+        
+        if (coverageData && coverageData.testResults) {
+          let totalTests = 0;
+          let passingTests = 0;
+          
+          coverageData.testResults.forEach((result: any) => {
+            if (result.assertionResults) {
+              result.assertionResults.forEach((assertion: any) => {
+                // Use the full test path as the key
+                const filePath = result.name.split('/').pop()?.replace('.test.js', '') || '';
+                const ancestors = assertion.ancestorTitles || [];
+                const testName = assertion.title;
+                
+                // Create a key with the full path structure
+                const fullPath = [filePath, ...ancestors, testName].join(' / ');
+                const status = assertion.status === 'passed' ? 'passed' : 'failed';
+                
+                testStatusMap[fullPath] = status;
+                
+                totalTests++;
+                if (status === 'passed') passingTests++;
+              });
+            }
+          });
+          
+          setStats({
+            total: totalTests,
+            passing: passingTests,
+            time: `${dt}ms`
+          });
+        }
+        
+        setTestStatuses(testStatusMap);
+      } catch (err) {
+        console.error("Failed to read coverage report:", err);
+      }
+
       // collect debug data with proper formatting to match fixtures structure
       try {
-        const dirs = await webContainer.fs.readdir("/.timetravel", {
-          withFileTypes: true,
-        });
-        
         // Recursive function to find leaf directories (containing only files)
         const findLeafDirs = async (path: string): Promise<string[]> => {
           const entries = await webContainer.fs.readdir(path, {
             withFileTypes: true,
           });
-          
+
           const subdirs = entries.filter((entry: any) => entry.isDirectory());
-          
+
           // If no subdirectories, this is a leaf directory
           if (subdirs.length === 0) {
             return [path];
           }
-          
+
           // Otherwise, recursively check all subdirectories
           const results: string[] = [];
           for (const dir of subdirs) {
@@ -94,26 +136,27 @@ const useWebcontainerDebugger = () => {
             const leafDirs = await findLeafDirs(subpath);
             results.push(...leafDirs);
           }
-          
+
           return results.filter((dir: string) => !dir.includes("UnknownTest"));
         };
-        
+
         // Find all leaf directories and process them
         const leafDirs = await findLeafDirs("/.timetravel");
+        
         const testNames = leafDirs.map(dir => dir.split('/').pop()!);
         const unsortedDebugSteps = testNames.reduce((acc, testName) => {
           acc[testName] = [];
           return acc;
         }, {} as Record<string, any>);
 
-        // Process each leaf directory
+  // Process each leaf directory
         for (const leafDir of leafDirs) {
           // Process files in the leaf directory
+
           const files = await webContainer.fs.readdir(leafDir, {
             withFileTypes: true,
           });
 
-          // Read all files in the leaf directory
           for (const file of files) {
             try {
               const filePath = `${leafDir}/${file.name}`;
@@ -131,7 +174,7 @@ const useWebcontainerDebugger = () => {
           }
         }
 
-        const groupedDebugSteps = Object.entries(unsortedDebugSteps).reduce((acc, [testName, steps]) => {
+      const groupedDebugSteps = Object.entries(unsortedDebugSteps).reduce((acc, [testName, steps]) => {
           const sortedSteps = steps.sort((a: any, b: any) => {
             const stepA = a.stepNumber !== undefined ? a.stepNumber : 0;
             const stepB = b.stepNumber !== undefined ? b.stepNumber : 0;
@@ -149,11 +192,12 @@ const useWebcontainerDebugger = () => {
         }, {} as Record<string, Record<string, any>>);
 
         setDebugSteps(groupedDebugSteps);
+        setStatus({ text: "Tests complete", color: "#3BB446" });
       } catch (err) {
         console.error("Failed to read .timetravel directory:", err);
       }
     };
-    
+
     runTests();
   }, [webContainer, webContainerStatus]);
 
@@ -177,6 +221,7 @@ const useWebcontainerDebugger = () => {
     debugSteps,
     status,
     stats,
+    testStatuses,
     handleFileUpdate
   };
 };
@@ -188,20 +233,33 @@ interface WebContainerDebuggerProps {
   // Optional props to override defaults
   files?: DumbFileMap;
   debugSteps?: Record<string, any>;
+  testStatuses?: Record<string, "passed" | "failed" | "unknown">;
 }
 
 const WebContainerDebugger: React.FC<WebContainerDebuggerProps> = (props) => {
-  const { files: filesFromHook, debugSteps: stepsFromHook, status, stats } = useWebcontainerDebugger();
+  const { 
+    files: filesFromHook, 
+    debugSteps: stepsFromHook, 
+    status, 
+    stats, 
+    testStatuses: statusesFromHook 
+  } = useWebcontainerDebugger();
 
   // Use props if provided, otherwise use data from hook
   const files = props.files || filesFromHook;
   const debugSteps = props.debugSteps || stepsFromHook;
-
+  const testStatuses = props.testStatuses || statusesFromHook;
+  console.log("testStatuses", testStatuses);
+  console.log("debugSteps", debugSteps);
   return (
     <div className="flex flex-col h-screen w-full bg-[#1e1e1e] text-[#e0e0e0] font-sans">
       {/* Main content */}
       <div className="flex-1 overflow-hidden">
-        <DumbDebugger files={files} debugSteps={debugSteps} />
+        <DumbDebugger 
+          files={files} 
+          debugSteps={debugSteps} 
+          testStatuses={testStatuses} 
+        />
       </div>
 
       {/* Status bar */}

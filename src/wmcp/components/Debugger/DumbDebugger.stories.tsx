@@ -17,6 +17,7 @@ export const Math: Story = {
   args: {
     files: mathFixtures.files,
     debugSteps: mathFixtures.debugSteps,
+    testStatuses: mathFixtures.testStatuses,
   },
 };
 
@@ -25,5 +26,6 @@ export const OData: Story = {
   args: {
     files: odataFixtures.files,
     debugSteps: odataFixtures.debugSteps,
+    testStatuses: odataFixtures.testStatuses,
   },
 };

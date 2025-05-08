@@ -187,6 +187,13 @@ export default function WebContainerProvider({
 
                     console.log("WebContainer booted successfully");
                     setWebContainer(webContainer);
+
+                    if (process.env.NODE_ENV === "development") {
+                      // @ts-expect-error
+                      window.webcontainer = webContainer;
+                      // @ts-expect-error
+                      window.wc = webContainer;
+                    }
                     
                     webContainer.on('server-ready', (port, url) => {
                         console.log(`Server ready on port ${port}: ${url}`);

@@ -18,6 +18,11 @@ import { lintKeymap } from "@codemirror/lint";
 import { vscodeDark } from '@uiw/codemirror-theme-vscode';
 import { getLanguages } from './languages';
 import { lineNumbers } from '@codemirror/view';
+import { javascript } from "@codemirror/lang-javascript";
+import { html } from "@codemirror/lang-html";
+import { css } from "@codemirror/lang-css";
+import { json } from "@codemirror/lang-json";
+import { markdown } from "@codemirror/lang-markdown";
 
 // Define state effects for highlighting
 export const clearHighlight = StateEffect.define<null>();

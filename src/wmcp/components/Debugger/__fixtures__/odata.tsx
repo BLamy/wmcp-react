@@ -1,4 +1,20 @@
 // Sample files for the debugger
+
+
+export const testStatuses = {
+    'odata.spec / parseODataQuery / should parse $filter': 'passed',
+    'odata.spec / parseODataQuery / should parse $select': 'passed',
+    'odata.spec / parseODataQuery / should parse $expand': 'passed',
+    'odata.spec / parseODataQuery / should parse $top': 'passed',
+    'odata.spec / parseODataQuery / should parse $skip': 'passed',
+    'odata.spec / parseODataQuery / should parse $orderby': 'passed',
+    'odata.spec / parseODataQuery / should parse $count': 'passed',
+    'odata.spec / parseODataQuery / should parse $search': 'passed',
+    'odata.spec / parseODataQuery / should parse $format': 'passed',
+    'odata.spec / parseODataQuery / should parse $compute': 'passed',
+    'odata.spec / parseODataQuery / should parse $apply': 'passed',
+    'odata.spec / parseODataQuery / should parse multiple query options': 'passed'
+  } as Record<string, 'passed' | 'failed' | 'unknown'>;
 export const files = {
     "odata.ts": {
         file: {
@@ -415,7 +431,6 @@ describe('parseODataQuery', () => {
                 },
             }
         ],
-        },
         "should parse $select": [
             {
                 line: 11,
@@ -1324,4 +1339,5 @@ describe('parseODataQuery', () => {
     }
     ],
   },
-};
+} }
+

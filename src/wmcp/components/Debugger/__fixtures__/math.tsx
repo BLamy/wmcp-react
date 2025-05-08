@@ -1,3 +1,10 @@
+export const testStatuses = {
+  'math.spec / Math / add / adds numbers': 'passed',
+  'math.spec / Math / subtract / subtracts numbers': 'failed',
+  'math.spec / Math / multiply / multiplies numbers': 'passed',
+  'math.spec / Math / divide / divides numbers': 'unknown'
+} as Record<string, 'passed' | 'failed' | 'unknown'>;
+
 // Sample files for the debugger
 export const files = {
   "math.spec.js": {

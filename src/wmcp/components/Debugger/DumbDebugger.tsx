@@ -24,12 +24,25 @@ import {
   EditorView,
   Decoration,
   DecorationSet,
+  keymap,
+  lineNumbers,
+  highlightActiveLineGutter,
+  highlightActiveLine,
 } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { javascript } from "@codemirror/lang-javascript";
+import { defaultKeymap, indentWithTab } from "@codemirror/commands";
+import { closeBrackets, completionKeymap } from "@codemirror/autocomplete";
+import { autocompletion } from "@codemirror/autocomplete";
+import { indentOnInput, syntaxHighlighting } from "@codemirror/language";
+import { bracketMatching } from "@codemirror/language";
+import { foldGutter, foldKeymap } from "@codemirror/language";
+import { lintKeymap } from "@codemirror/lint";
 import { oneDark } from "@codemirror/theme-one-dark";
-
+import { LeftPanelIcon } from "./icons";
 import "./debugger.css";
+import { html } from "@codemirror/lang-html";
+import WebcontainerFileBrowser from "./WebcontainerFileBrowser";
 
 /* ------------------------------------------------------------------ */
 /* Public API types                                                    */
@@ -48,6 +61,7 @@ export interface DebugStep {
 export interface DebuggerProps {
   files: DumbFileMap;
   debugSteps: Record<string, any>; // arbitrarily deep suites → tests
+  testStatuses?: Record<string, "passed" | "failed" | "unknown">;
 }
 
 /* ------------------------------------------------------------------ */
@@ -100,6 +114,26 @@ const CodeEditor: FC<{
         extensions: [
           basicSetup,
           javascript(),
+          html(),
+          autocompletion(),
+          highlightActiveLine(),
+          highlightActiveLineGutter(),
+          indentOnInput(),
+          bracketMatching(),
+          closeBrackets(),
+          foldGutter(),
+          lineNumbers(),
+          // Add keymaps in this order
+          keymap.of([
+            ...defaultKeymap,
+            ...completionKeymap,
+            ...lintKeymap,
+            ...foldKeymap,
+            indentWithTab
+          ]),
+
+
+
           oneDark,
           highlightField,
           EditorView.editable.of(false),
@@ -191,7 +225,8 @@ const DebuggerPanel: FC<{
 const TestList: FC<{
   tests: Record<string, DebugStep[]>;
   onSelect: (steps: DebugStep[]) => void;
-}> = ({ tests, onSelect }) => (
+  testStatuses?: Record<string, "passed" | "failed" | "unknown">;
+}> = ({ tests, onSelect, testStatuses = {} }) => (
   <div className="test-list-container h-full overflow-y-auto text-[13px]">
     {Object.keys(tests).length === 0 ? (
       <div className="no-data-message p-4 text-[#888] text-center">
@@ -199,16 +234,24 @@ const TestList: FC<{
       </div>
     ) : (
       <ul>
-        {Object.entries(tests).map(([name, steps]) => (
-          <li
-            key={name}
-            className="debug-test-item flex justify-between px-4 py-1 hover:bg-[#2a2d2e] cursor-pointer"
-            onClick={() => onSelect(steps)}
-          >
-            <span className="test-name flex-1">{name}</span>
-            <span className="test-steps text-xs text-[#888]">{steps.length} steps</span>
-          </li>
-        ))}
+        {Object.entries(tests).map(([name, steps]) => {
+          const status = testStatuses[name] || "unknown";
+          const statusIcon = status === "passed" ? "✅" : status === "failed" ? "❌" : "⚪";
+          
+          return (
+            <li
+              key={name}
+              className="debug-test-item flex justify-between px-4 py-1 hover:bg-[#2a2d2e] cursor-pointer"
+              onClick={() => onSelect(steps)}
+            >
+              <span className="test-name flex-1">
+                <span className="status-icon mr-2">{statusIcon}</span>
+                {name}
+              </span>
+              <span className="test-steps text-xs text-[#888]">{steps.length} steps</span>
+            </li>
+          );
+        })}
       </ul>
     )}
   </div>
@@ -253,7 +296,7 @@ const flattenDebugSteps = (raw: Record<string, any>) => {
 /* ------------------------------------------------------------------ */
 /* MAIN Debugger component                                             */
 /* ------------------------------------------------------------------ */
-const Debugger: FC<DebuggerProps> = ({ files, debugSteps }) => {
+const Debugger: FC<DebuggerProps> = ({ files, debugSteps, testStatuses = {} }) => {
   const parsedTests   = useMemo(() => flattenDebugSteps(debugSteps), [debugSteps]);
   const fileList      = useMemo(() => Object.keys(files), [files]);
 
@@ -261,6 +304,7 @@ const Debugger: FC<DebuggerProps> = ({ files, debugSteps }) => {
   const [showDebugger, setShowDebugger] = useState(true);
   const [selected, setSelected]         = useState<DebugStep[] | null>(null);
   const [stepIndex, setStepIndex]       = useState(0);
+  const [activeTab, setActiveTab]       = useState<'debugger' | 'files'>('debugger');
 
   const viewRef = useRef<EditorView | null>(null);
 
@@ -278,20 +322,38 @@ const Debugger: FC<DebuggerProps> = ({ files, debugSteps }) => {
   };
 
   const highlightLine = (line: number) => {
-    const view = viewRef.current;
-    if (!view) return;
-    const { doc } = view.state;
-    if (line < 1 || line > doc.lines) return;
+    try {
+      const view = viewRef.current;
+      if (!view) return;
+      const { doc } = view.state;
+      if (line < 1 || line > doc.lines) {
+        console.warn(`Attempted to highlight invalid line number: ${line}, document has ${doc.lines} lines`);
+        return;
+      }
 
-    const info = doc.line(line);
-    const deco = Decoration.set([
-      Decoration.mark({ attributes: { class: "cm-debugger-highlight" } }).range(info.from, info.to),
-    ]);
-    view.dispatch({ effects: [addHighlight.of(deco)], selection: { anchor: info.from }, scrollIntoView: true });
+      const info = doc.line(line);
+      // Ensure we have a valid range to highlight (not empty)
+      if (info.from === info.to || info.from > info.to) {
+        console.warn(`Invalid range for highlight at line ${line}: from=${info.from}, to=${info.to}`);
+        return;
+      }
+      
+      const deco = Decoration.set([
+        Decoration.mark({ attributes: { class: "cm-debugger-highlight" } }).range(info.from, info.to),
+      ]);
+      view.dispatch({ effects: [addHighlight.of(deco)], selection: { anchor: info.from }, scrollIntoView: true });
+    } catch (err) {
+      console.error('Error highlighting line:', err);
+    }
   };
 
   /* sync selection with editor -------------------------------------- */
   const handleStepSelect = (s: DebugStep) => {
+    if (!s || typeof s.line !== 'number') {
+      console.warn('Attempted to highlight a step with invalid line:', s);
+      return;
+    }
+    
     if (s.file !== currentFile) {
       clearHighlights();
       setCurrentFile(s.file);
@@ -301,12 +363,85 @@ const Debugger: FC<DebuggerProps> = ({ files, debugSteps }) => {
     }
   };
 
+  /* handle file selection from file browser -------------------------- */
+  const handleFileSelect = (filePath: string) => {
+    clearHighlights();
+    setCurrentFile(filePath);
+  };
+
   /* ------------------------------------------------------------------ */
   /* JSX                                                                */
   /* ------------------------------------------------------------------ */
   return (
     <div className="flex flex-col h-screen w-full overflow-hidden bg-[#1e1e1e] text-[#e0e0e0] font-sans">
       <div className="flex flex-1 min-h-0 overflow-hidden">
+
+        {/* Left side panel (Debugger or File Browser) --------------------- */}
+        {showDebugger && (
+          <div className="flex flex-col w-[400px] border-l border-[#333] bg-[#252526]">
+            {/* Tab header */}
+            <div className="flex bg-[#252526] border-b border-[#333]">
+              <button
+                className={`px-4 py-2 text-sm relative ${
+                  activeTab === 'debugger'
+                    ? "text-white after:absolute after:h-[2px] after:bg-[#007acc] after:bottom-0 after:left-0 after:right-0"
+                    : "text-[#969696] hover:text-white"
+                }`}
+                onClick={() => setActiveTab('debugger')}
+              >
+                Debugger
+              </button>
+              <button
+                className={`px-4 py-2 text-sm relative ${
+                  activeTab === 'files'
+                    ? "text-white after:absolute after:h-[2px] after:bg-[#007acc] after:bottom-0 after:left-0 after:right-0"
+                    : "text-[#969696] hover:text-white"
+                }`}
+                onClick={() => setActiveTab('files')}
+              >
+                Files
+              </button>
+            </div>
+
+            {/* Panel content based on active tab */}
+            {activeTab === 'debugger' ? (
+              <>
+                {/* test list */}
+                <div className="h-[300px] border-b border-[#333] overflow-hidden">
+                  <TestList 
+                    tests={parsedTests} 
+                    onSelect={handleTestSelect} 
+                    testStatuses={testStatuses}
+                  />
+                </div>
+
+                {/* step viewer */}
+                <div className="flex-1 overflow-hidden">
+                  {selected ? (
+                    <DebuggerPanel 
+                      steps={selected} 
+                      onStepSelect={handleStepSelect}
+                      stepIndex={stepIndex}
+                      onStepIndexChange={setStepIndex}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-[#888] text-sm">
+                      Select a test to debug
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              /* File browser */
+              <WebcontainerFileBrowser
+                files={files}
+                currentFile={currentFile}
+                onFileSelect={handleFileSelect}
+              />
+            )}
+          </div>
+        )}
+
         {/* Editor pane ------------------------------------------------- */}
         <div className="flex flex-col flex-1 min-w-[300px] overflow-hidden">
           {/* file tabs */}
@@ -330,18 +465,14 @@ const Debugger: FC<DebuggerProps> = ({ files, debugSteps }) => {
 
             {/* debugger toggle */}
             <button
-              title="Toggle Debugger"
-              className={`ml-auto mr-2 my-1 w-7 h-7 flex items-center justify-center rounded-sm transition ${
-                showDebugger
-                  ? "bg-[#007acc] text-white"
-                  : "bg-[#3c3c3c] text-[#cccccc] hover:bg-[#4c4c4c]"
-              }`}
+              title="Toggle Side Panel"
+              className={`ml-auto mr-2 my-1 w-7 h-7 flex items-center justify-center rounded-sm transition `}
               onClick={() => {
                 clearHighlights();
                 setShowDebugger(v => !v);
               }}
             >
-              🐞
+              <LeftPanelIcon isOpen={showDebugger} />
             </button>
           </div>
 
@@ -355,31 +486,6 @@ const Debugger: FC<DebuggerProps> = ({ files, debugSteps }) => {
           </div>
         </div>
 
-        {/* Debugger pane ---------------------------------------------- */}
-        {showDebugger && (
-          <div className="flex flex-col w-[400px] border-l border-[#333] bg-[#252526]">
-            {/* test list */}
-            <div className="h-[300px] border-b border-[#333] overflow-hidden">
-              <TestList tests={parsedTests} onSelect={handleTestSelect} />
-            </div>
-
-            {/* step viewer */}
-            <div className="flex-1 overflow-hidden">
-              {selected ? (
-                <DebuggerPanel 
-                  steps={selected} 
-                  onStepSelect={handleStepSelect}
-                  stepIndex={stepIndex}
-                  onStepIndexChange={setStepIndex}
-                />
-              ) : (
-                <div className="flex items-center justify-center h-full text-[#888] text-sm">
-                  Select a test to debug
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
