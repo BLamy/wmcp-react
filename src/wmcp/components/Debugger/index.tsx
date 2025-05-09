@@ -68,6 +68,25 @@ const useWebcontainerDebugger = () => {
       const proc = await webContainer.spawn("npm", ["test"]);
       await proc.exit;
       const dt = Math.round(performance.now() - t0);
+      
+      // First load all test files to display in the editor
+      try {
+        const availableFiles = ['index.js', 'index.test.js'];
+        const fileMap: DumbFileMap = {};
+        
+        for (const fileName of availableFiles) {
+          try {
+            const content = await webContainer.fs.readFile(`/${fileName}`, 'utf-8');
+            fileMap[fileName] = { file: { contents: content } };
+          } catch (err) {
+            console.error(`Failed to read ${fileName}:`, err);
+          }
+        }
+        
+        setFiles(fileMap);
+      } catch (err) {
+        console.error("Failed to load test files:", err);
+      }
 
       // Read the coverage report to get test statuses
       try {
@@ -90,8 +109,10 @@ const useWebcontainerDebugger = () => {
                 const ancestors = assertion.ancestorTitles || [];
                 const testName = assertion.title;
                 
-                // Create a key with the full path structure
-                const fullPath = [filePath, ...ancestors, testName].join(' / ');
+                // Create a key with the full path structure (matching fixture format)
+                // Format: 'math.spec / Math / add / adds numbers'
+                const fileName = `${filePath}.spec`;
+                const fullPath = `${fileName} / ${ancestors.join(' / ')} / ${testName}`;
                 const status = assertion.status === 'passed' ? 'passed' : 'failed';
                 
                 testStatusMap[fullPath] = status;
@@ -116,6 +137,10 @@ const useWebcontainerDebugger = () => {
 
       // collect debug data with proper formatting to match fixtures structure
       try {
+        const dirs = await webContainer.fs.readdir("/.timetravel", {
+          withFileTypes: true,
+        });
+
         // Recursive function to find leaf directories (containing only files)
         const findLeafDirs = async (path: string): Promise<string[]> => {
           const entries = await webContainer.fs.readdir(path, {
@@ -142,17 +167,24 @@ const useWebcontainerDebugger = () => {
 
         // Find all leaf directories and process them
         const leafDirs = await findLeafDirs("/.timetravel");
-        
-        const testNames = leafDirs.map(dir => dir.split('/').pop()!);
-        const unsortedDebugSteps = testNames.reduce((acc, testName) => {
-          acc[testName] = [];
-          return acc;
-        }, {} as Record<string, any>);
 
-  // Process each leaf directory
+        // We'll build a structure: { [fileName]: { [describeBlock]: { [testName]: steps[] } } }
+        // For example: { "odata.spec.js": { "parseODataQuery": { "should parse $filter": [...] } } }
+        const debugStepsByFile: Record<string, Record<string, Record<string, any[]>>> = {};
+
         for (const leafDir of leafDirs) {
-          // Process files in the leaf directory
+          // The leafDir path is like "/.timetravel/odata.spec/parseODataQuery/should parse $filter"
+          const parts = leafDir.split('/').filter(Boolean);
+          // Find the last three parts: [fileName, describeBlock, testName]
+          // e.g. ["odata.spec", "parseODataQuery", "should parse $filter"]
+          const [fileName, describeBlock, testName] = parts.slice(-3);
 
+          if (!fileName || !describeBlock || !testName) continue;
+
+          // Use correct extension to match fixture format (.js not .spec.js)
+          const fileKey = `${fileName}.js`;
+
+          // Read all files in the leaf directory
           const files = await webContainer.fs.readdir(leafDir, {
             withFileTypes: true,
           });
@@ -160,11 +192,23 @@ const useWebcontainerDebugger = () => {
           for (const file of files) {
             try {
               const filePath = `${leafDir}/${file.name}`;
-              const testName = leafDir.split('/').pop()!;
               const content = await webContainer.fs.readFile(filePath, 'utf-8');
               try {
                 const jsonData = JSON.parse(content);
-                unsortedDebugSteps[testName].push(jsonData);
+                // Ensure structure exists
+                if (!debugStepsByFile[fileKey]) debugStepsByFile[fileKey] = {};
+                if (!debugStepsByFile[fileKey][describeBlock]) debugStepsByFile[fileKey][describeBlock] = {};
+                if (!debugStepsByFile[fileKey][describeBlock][testName]) debugStepsByFile[fileKey][describeBlock][testName] = [];
+                
+                // Ensure each step has a file property that matches the file key
+                const stepWithFile = {
+                  ...jsonData,
+                  file: fileKey,
+                  line: jsonData.line || 1, // Ensure line exists
+                  vars: jsonData.vars || {} // Ensure vars exists
+                };
+                
+                debugStepsByFile[fileKey][describeBlock][testName].push(stepWithFile);
               } catch (parseErr) {
                 console.warn(`Could not parse ${file.name} as JSON:`, parseErr);
               }
@@ -174,22 +218,52 @@ const useWebcontainerDebugger = () => {
           }
         }
 
-      const groupedDebugSteps = Object.entries(unsortedDebugSteps).reduce((acc, [testName, steps]) => {
-          const sortedSteps = steps.sort((a: any, b: any) => {
-            const stepA = a.stepNumber !== undefined ? a.stepNumber : 0;
-            const stepB = b.stepNumber !== undefined ? b.stepNumber : 0;
-            return stepA - stepB;
-          }).map((step: any) => ({
-            ...step,
-            file: step.file.split('/').pop()!
-          }));
-          const fileName = sortedSteps[sortedSteps.length - 1].file;
-          if (!acc[fileName]) {
-            acc[fileName] = {};
+        // Sort steps by stepNumber and ensure file property matches files object keys
+        const groupedDebugSteps: Record<string, any> = {};
+        for (const [fileName, describeBlocks] of Object.entries(debugStepsByFile)) {
+          groupedDebugSteps[fileName] = {};
+          for (const [describeBlock, tests] of Object.entries(describeBlocks)) {
+            groupedDebugSteps[fileName][describeBlock] = {};
+            for (const [testName, steps] of Object.entries(tests)) {
+              const sortedSteps = steps
+                .sort((a: any, b: any) => {
+                  const stepA = a.stepNumber !== undefined ? a.stepNumber : 0;
+                  const stepB = b.stepNumber !== undefined ? b.stepNumber : 0;
+                  return stepA - stepB;
+                })
+                .map((step: any) => ({
+                  ...step,
+                  file: fileName, // Keep consistent with the files object keys
+                }));
+              groupedDebugSteps[fileName][describeBlock][testName] = sortedSteps;
+            }
           }
-          acc[fileName][testName] = sortedSteps;
-          return acc;
-        }, {} as Record<string, Record<string, any>>);
+        }
+
+        // Make sure all referenced files in debugSteps exist in the files object
+        // If not, load them
+        const filesNeeded = new Set<string>();
+        Object.keys(groupedDebugSteps).forEach(fileName => {
+          filesNeeded.add(fileName);
+        });
+        
+        const filesToLoad = Array.from(filesNeeded).filter(file => !files[file]);
+        for (const file of filesToLoad) {
+          try {
+            const content = await webContainer.fs.readFile(`/${file.replace('.spec.js', '.js')}`, 'utf-8');
+            setFiles(prev => ({
+              ...prev,
+              [file]: { file: { contents: content } }
+            }));
+          } catch (err) {
+            console.error(`Failed to read ${file}:`, err);
+            // Create an empty placeholder
+            setFiles(prev => ({
+              ...prev,
+              [file]: { file: { contents: `// File ${file} could not be loaded` } }
+            }));
+          }
+        }
 
         setDebugSteps(groupedDebugSteps);
         setStatus({ text: "Tests complete", color: "#3BB446" });
@@ -242,24 +316,38 @@ const WebContainerDebugger: React.FC<WebContainerDebuggerProps> = (props) => {
     debugSteps: stepsFromHook, 
     status, 
     stats, 
-    testStatuses: statusesFromHook 
+    testStatuses: statusesFromHook,
+    handleFileUpdate
   } = useWebcontainerDebugger();
 
   // Use props if provided, otherwise use data from hook
   const files = props.files || filesFromHook;
   const debugSteps = props.debugSteps || stepsFromHook;
   const testStatuses = props.testStatuses || statusesFromHook;
-  console.log("testStatuses", testStatuses);
-  console.log("debugSteps", debugSteps);
+
+  // Don't render until we have files
+  const hasFiles = Object.keys(files).length > 0;
+
   return (
     <div className="flex flex-col h-screen w-full bg-[#1e1e1e] text-[#e0e0e0] font-sans">
       {/* Main content */}
       <div className="flex-1 overflow-hidden">
-        <DumbDebugger 
-          files={files} 
-          debugSteps={debugSteps} 
-          testStatuses={testStatuses} 
-        />
+        {hasFiles ? (
+          <DumbDebugger 
+            files={files} 
+            debugSteps={debugSteps} 
+            testStatuses={testStatuses} 
+          />
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="text-2xl mb-4">Loading files...</div>
+              <div className="text-sm text-gray-400">
+                Waiting for WebContainer to load test files
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Status bar */}
