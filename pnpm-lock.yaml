@@ -14,6 +14,9 @@ importers:
       '@babel/register':
         specifier: ^7.27.1
         version: 7.27.1(@babel/core@7.26.10)
+      '@codemirror/autocomplete':
+        specifier: ^6.18.6
+        version: 6.18.6
       '@codemirror/commands':
         specifier: ^6.8.1
         version: 6.8.1
@@ -41,6 +44,12 @@ importers:
       '@codemirror/lang-rust':
         specifier: ^6.0.1
         version: 6.0.1
+      '@codemirror/language':
+        specifier: ^6.11.0
+        version: 6.11.0
+      '@codemirror/lint':
+        specifier: ^6.8.5
+        version: 6.8.5
       '@codemirror/state':
         specifier: ^6.2.1
         version: 6.5.2
