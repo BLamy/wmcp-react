@@ -4,6 +4,7 @@ import { WebContainer } from "@webcontainer/api";
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { FileSystemTree } from "@webcontainer/api";
 import { files } from "virtual:webcontainer-files";
+import { requestRelayManager } from "../lib/RequestRelayUtils";
 
 type WebContainerStatus = "booting" | "installing" | "mounting" | "ready" | "none" | "error";
 
@@ -14,6 +15,8 @@ interface WebContainerContextValue {
   unregisterFilesystem: (id: string) => void;
   filesystemIds: string[]; // Add a property to see registered filesystems
   status: WebContainerStatus;
+  portForwards: Record<number, string>;
+  generateProxyUrl: (port: number, path?: string) => string;
 }
 
 export const WebContainerContext = createContext<WebContainerContextValue>({
@@ -21,7 +24,9 @@ export const WebContainerContext = createContext<WebContainerContextValue>({
   registerFilesystem: () => {},
   unregisterFilesystem: () => {},
   filesystemIds: [],
-  status: "none"
+  status: "none",
+  portForwards: {},
+  generateProxyUrl: () => ""
 });
 
 const crossOriginIsolatedErrorMessage = `Failed to execute 'postMessage' on 'Worker': SharedArrayBuffer transfer requires self.crossOriginIsolated.`;
@@ -197,7 +202,14 @@ export default function WebContainerProvider({
                     
                     webContainer.on('server-ready', (port, url) => {
                         console.log(`Server ready on port ${port}: ${url}`);
-                        setPortForwards((prev) => ({...prev, [port]: url}));
+                        setPortForwards((prev) => {
+                            const newPortForwards = {...prev, [port]: url};
+                            
+                            // Update request relay manager with new port mapping
+                            requestRelayManager.updatePortMapping(port, url);
+                            
+                            return newPortForwards;
+                        });
                     });
                     
                     // Write files directly to WebContainer
@@ -351,12 +363,27 @@ export default function WebContainerProvider({
         };
     }, [ready, webContainer, webContainerStatus]);
 
+    // Effect to sync port forwards with request relay manager
+    useEffect(() => {
+        if (Object.keys(portForwards).length > 0) {
+            const mappings = Object.entries(portForwards).map(([port, url]) => ({
+                port: parseInt(port),
+                url,
+                appId: `app-${port}`
+            }));
+            
+            requestRelayManager.updatePortMappings(mappings);
+        }
+    }, [portForwards]);
+
     const contextValue = {
       webContainer,
       registerFilesystem,
       unregisterFilesystem,
       filesystemIds,
-      status: webContainerStatus
+      status: webContainerStatus,
+      portForwards,
+      generateProxyUrl: (port: number, path?: string) => requestRelayManager.generateProxyUrl(port, path)
     };
 
     return (

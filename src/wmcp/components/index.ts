@@ -18,4 +18,7 @@ export * from './layout/ActionCard';
 // MCP components
 export * from './mcp/ToolsList';
 export * from './mcp/ResourcesList';
-export * from './mcp/DynamicForm'; 
+export * from './mcp/DynamicForm';
+
+// Demo components
+export * from './demo/RequestRelayDemo'; 
